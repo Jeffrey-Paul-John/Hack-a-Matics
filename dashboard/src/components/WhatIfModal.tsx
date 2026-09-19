@@ -16,6 +16,7 @@ import {
   Users,
   Activity,
   Timer,
+  Info,
 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Strategy, WhatIfResponse } from '../api/types'
@@ -715,7 +716,7 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-                    {/* Wait Time Metric (Completed) */}
+                    {/* Wait Time Metric (Completed - Secondary Diagnostic) */}
                     {(() => {
                       const isZeroVar = Boolean(
                         result.statistical_summary.zero_variance?.wait ||
@@ -728,9 +729,9 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                             <span className="text-[10px] text-slate-500 font-semibold uppercase">Completed Wait</span>
                             {result.statistical_summary.wait_significant && !isZeroVar && (
                               <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
                               }`}>
-                                p &lt; 0.05
+                                {isImproved ? 'p < 0.05' : 'backlog cleared'}
                               </span>
                             )}
                           </div>
@@ -875,18 +876,23 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       )
                     })()}
 
-                    {/* SLA Breaches Metric */}
+                    {/* SLA Breaches Metric (Censoring-Aware) */}
                     {(() => {
+                      const slaDelta = result.delta.sla_violations_all ?? result.delta.sla_violations ?? 0
+                      const ciSla = result.statistical_summary.ci_sla_all_95 ?? result.statistical_summary.ci_sla_95 ?? [0, 0]
                       const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.sla_all ||
                         result.statistical_summary.zero_variance?.sla ||
-                        ((result.statistical_summary.ci_sla_95?.[0] ?? 0) === 0 && (result.statistical_summary.ci_sla_95?.[1] ?? 0) === 0 && (result.delta.sla_violations ?? 0) === 0)
+                        (ciSla[0] === 0 && ciSla[1] === 0 && slaDelta === 0)
                       )
-                      const isImproved = (result.delta.sla_violations ?? 0) < 0
+                      const isImproved = slaDelta < 0
+                      const isSlaSig = result.statistical_summary.sla_all_significant ?? result.statistical_summary.sla_significant
+                      const adjPSla = result.statistical_summary.holm_bonferroni?.adj_p_sla_all ?? result.statistical_summary.holm_bonferroni?.adj_p_sla
                       return (
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase">SLA Breaches</span>
-                            {result.statistical_summary.sla_significant && !isZeroVar && (
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">SLA Breaches (All)</span>
+                            {isSlaSig && !isZeroVar && (
                               <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
                                 isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                               }`}>
@@ -895,18 +901,18 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                             )}
                           </div>
                           <strong className="text-slate-900 font-mono text-sm block mt-0.5">
-                            {result.delta.sla_violations > 0 ? '+' : ''}
-                            {result.delta.sla_violations.toFixed(1)} breaches
+                            {slaDelta > 0 ? '+' : ''}
+                            {slaDelta.toFixed(1)} breaches
                           </strong>
                           <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
-                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${result.statistical_summary.ci_sla_95?.[0].toFixed(1) ?? '0.0'}, ${result.statistical_summary.ci_sla_95?.[1].toFixed(1) ?? '0.0'}]`}
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${ciSla[0].toFixed(1)}, ${ciSla[1].toFixed(1)}]`}
                           </span>
-                          {result.statistical_summary.holm_bonferroni && (
+                          {adjPSla !== undefined && (
                             <span className="text-[9px] text-slate-400 font-mono block">
                               adj p = {isZeroVar ? 'n/a (no variation)' : (
-                                result.statistical_summary.holm_bonferroni.adj_p_sla < 0.001
+                                adjPSla < 0.001
                                   ? '< 0.001'
-                                  : result.statistical_summary.holm_bonferroni.adj_p_sla.toFixed(3)
+                                  : adjPSla.toFixed(3)
                               )}
                             </span>
                           )}
@@ -919,13 +925,23 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
 
               {/* Side by Side Comparative Metrics Grid (6 Complete Clinical Metrics) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {/* Metric 1: Completed Average Wait Time */}
+                {/* Metric 1: Completed Average Wait Time (Secondary Diagnostic) */}
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Completed Avg Wait</span>
-                    <Clock size={15} />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Completed Avg Wait</span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-bold">
+                        Secondary
+                      </span>
+                    </div>
+                    <div className="relative group cursor-pointer" title="Rises when a backlog clears as long-waiting queued patients are discharged">
+                      <Info size={15} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                      <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover:block w-52 p-2 bg-slate-900 text-white text-[10px] rounded-lg shadow-xl z-30 leading-relaxed font-normal pointer-events-none">
+                        Rises when a backlog clears as long-waiting queued patients finally get treated. Not an operational regression.
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 mb-2">Discharged patients only</p>
+                  <p className="text-[10px] text-slate-400 mb-2">Discharged patients only (rises when backlog clears)</p>
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
@@ -940,18 +956,18 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                         result.delta.wait_minutes < 0
                           ? 'bg-emerald-100 text-emerald-800'
                           : result.delta.wait_minutes > 0
-                          ? 'bg-rose-100 text-rose-800'
+                          ? 'bg-slate-100 text-slate-700 font-mono'
                           : 'bg-slate-100 text-slate-700'
                       }`}
+                      title={result.delta.wait_minutes > 0 ? 'Rises as long-waiting queued patients are discharged' : undefined}
                     >
                       {result.delta.wait_minutes < 0 ? (
                         <TrendingDown size={12} />
-                      ) : result.delta.wait_minutes > 0 ? (
-                        <TrendingUp size={12} />
                       ) : null}
                       <span>
                         {result.delta.wait_minutes > 0 ? '+' : ''}
                         {result.delta.wait_minutes.toFixed(1)}m
+                        {result.delta.wait_minutes > 0 ? ' (backlog)' : ''}
                       </span>
                     </div>
                   </div>
@@ -1083,45 +1099,45 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   </div>
                 </div>
 
-                {/* Metric 5: SLA Breaches */}
+                {/* Metric 5: SLA Breaches (All Censoring-Aware) */}
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
                   <div className="flex items-center justify-between text-slate-500 mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">SLA Breaches</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">SLA Breaches (All)</span>
                     <ShieldCheck size={15} />
                   </div>
-                  <p className="text-[10px] text-slate-400 mb-2">Wait target violations</p>
+                  <p className="text-[10px] text-slate-400 mb-2">Censoring-aware (completed + still waiting)</p>
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
-                        {typeof result.counterfactual.sla_violations === 'number'
-                          ? result.counterfactual.sla_violations.toFixed(1)
-                          : result.counterfactual.sla_violations}
+                        {(result.counterfactual.sla_violations_all ?? result.counterfactual.sla_violations).toFixed(1)}
                       </div>
                       <div className="text-[10px] text-slate-400 line-through">
-                        Baseline: {typeof result.baseline.sla_violations === 'number'
-                          ? result.baseline.sla_violations.toFixed(1)
-                          : result.baseline.sla_violations}
+                        Baseline: {(result.baseline.sla_violations_all ?? result.baseline.sla_violations).toFixed(1)}
                       </div>
                     </div>
-                    <div
-                      className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
-                        result.delta.sla_violations < 0
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : result.delta.sla_violations > 0
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      {result.delta.sla_violations < 0 ? (
-                        <TrendingDown size={12} />
-                      ) : result.delta.sla_violations > 0 ? (
-                        <TrendingUp size={12} />
-                      ) : null}
-                      <span>
-                        {result.delta.sla_violations > 0 ? '+' : ''}
-                        {result.delta.sla_violations.toFixed(1)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const dSla = result.delta.sla_violations_all ?? result.delta.sla_violations
+                      return (
+                        <div
+                          className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
+                            dSla < 0
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : dSla > 0
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {dSla < 0 ? <TrendingDown size={12} /> : dSla > 0 ? <TrendingUp size={12} /> : null}
+                          <span>
+                            {dSla > 0 ? '+' : ''}
+                            {dSla.toFixed(1)}
+                          </span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500 font-mono">
+                    Started/completed only: {(result.counterfactual.sla_violations_completed ?? result.counterfactual.sla_violations).toFixed(1)} vs {(result.baseline.sla_violations_completed ?? result.baseline.sla_violations).toFixed(1)} baseline
                   </div>
                 </div>
 
@@ -1168,6 +1184,135 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   </div>
                 </div>
               </div>
+
+              {/* Per-Change Contribution Breakdown */}
+              {result.per_change_contributions && result.per_change_contributions.length > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider font-mono text-slate-700">
+                        Per-Change Contribution Analysis
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        (Simulated individually with identical CRN seeds against baseline)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      Isolates marginal queue relief
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {result.per_change_contributions.map((contrib, idx) => {
+                      const isDriver = contrib.impact === 'primary_driver'
+                      const isPositive = contrib.impact === 'positive'
+                      const isNoEffect = contrib.impact === 'no_effect'
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                            isDriver
+                              ? 'bg-emerald-50/70 border-emerald-300'
+                              : isPositive
+                              ? 'bg-sky-50/60 border-sky-200'
+                              : isNoEffect
+                              ? 'bg-slate-50 border-slate-200 opacity-80'
+                              : 'bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full font-mono shrink-0 ${
+                                isDriver
+                                  ? 'bg-emerald-600 text-white font-black shadow-xs'
+                                  : isPositive
+                                  ? 'bg-sky-600 text-white font-bold'
+                                  : isNoEffect
+                                  ? 'bg-slate-200 text-slate-600'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {contrib.impact_label}
+                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-slate-900 font-mono block">
+                                {contrib.display}
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                {contrib.department} {contrib.resource} capacity
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-xs font-mono shrink-0 flex-wrap">
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block font-sans">Accrued Wait</span>
+                              <span
+                                className={`font-bold ${
+                                  contrib.delta_censoring_aware_wait < 0
+                                    ? 'text-emerald-700'
+                                    : contrib.delta_censoring_aware_wait > 0
+                                    ? 'text-rose-700'
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {contrib.delta_censoring_aware_wait > 0 ? '+' : ''}
+                                {contrib.delta_censoring_aware_wait.toFixed(2)}m
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block font-sans">End Queue</span>
+                              <span
+                                className={`font-bold ${
+                                  contrib.delta_end_queue < 0
+                                    ? 'text-emerald-700'
+                                    : contrib.delta_end_queue > 0
+                                    ? 'text-rose-700'
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {contrib.delta_end_queue > 0 ? '+' : ''}
+                                {contrib.delta_end_queue.toFixed(1)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block font-sans">Discharges</span>
+                              <span
+                                className={`font-bold ${
+                                  contrib.delta_patients_completed > 0
+                                    ? 'text-emerald-700'
+                                    : contrib.delta_patients_completed < 0
+                                    ? 'text-rose-700'
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {contrib.delta_patients_completed > 0 ? '+' : ''}
+                                {contrib.delta_patients_completed.toFixed(1)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block font-sans">SLA Breaches (All)</span>
+                              <span
+                                className={`font-bold ${
+                                  contrib.delta_sla_all < 0
+                                    ? 'text-emerald-700'
+                                    : contrib.delta_sla_all > 0
+                                    ? 'text-rose-700'
+                                    : 'text-slate-700'
+                                }`}
+                              >
+                                {contrib.delta_sla_all > 0 ? '+' : ''}
+                                {contrib.delta_sla_all.toFixed(1)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

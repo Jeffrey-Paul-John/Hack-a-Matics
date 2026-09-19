@@ -181,9 +181,11 @@ def test_stressed_state_shows_improvement_adding_bottleneck_resource():
 
 def test_stressed_doctor_delta_queue_and_censoring_aware_wait():
     """
-    Requirement 3: With a bottleneck doctor delta in a stressed state,
-    end-of-horizon queue length is not higher than baseline and
-    censoring-aware wait does not increase.
+    Requirement 1 & 2: With a bottleneck doctor delta in a stressed state:
+    - End-of-horizon queue length is not higher than baseline.
+    - Censoring-aware accrued wait does not increase.
+    - Total SLA breaches (all patients, including still waiting) does not increase.
+    - Verdict is based on unbiased metrics: 'improvement', not 'mixed'.
     """
     cfg = load_config("config/config.yaml")
     engine = SimulationEngine(cfg, seed=42)
@@ -210,10 +212,61 @@ def test_stressed_doctor_delta_queue_and_censoring_aware_wait():
         f"counterfactual={result['counterfactual']['censoring_aware_wait_minutes']}"
     )
 
-    # 3. Message classification is 'mixed' if completed wait rose due to backlog clearing, or 'improvement'
-    assert result["message"]["type"] in ("mixed", "improvement")
-    if result["message"]["type"] == "mixed":
-        assert "clearing right-censored backlog" in result["message"]["text"]
+    # 3. Total SLA breaches (all patients, including queued) does not increase
+    assert delta["sla_violations_all"] <= 0.0, (
+        f"Total SLA breaches increased: baseline={result['baseline']['sla_violations_all']}, "
+        f"counterfactual={result['counterfactual']['sla_violations_all']}"
+    )
+
+    # 4. Both SLA breach metrics are tracked and reported
+    assert "sla_violations_all" in result["baseline"]
+    assert "sla_violations_completed" in result["baseline"]
+    assert "sla_violations_all" in result["counterfactual"]
+    assert "sla_violations_completed" in result["counterfactual"]
+
+    # 5. Verdict is based on unbiased metrics: since all unbiased metrics improve,
+    # verdict is 'improvement' (not 'mixed')
+    assert result["message"]["type"] == "improvement"
+    assert "Statistically significant improvement" in result["message"]["text"]
+
+
+def test_per_change_contribution_breakdown():
+    """Requirement 3: Verify per-change contribution breakdown isolates each staged delta against baseline under identical seeds."""
+    cfg = load_config("config/config.yaml")
+    engine = SimulationEngine(cfg, seed=42)
+    engine.run(180)  # Build stressed queue
+
+    result = run_what_if_comparison(
+        current_engine=engine,
+        config=cfg,
+        horizon_minutes=60,
+        resource_adjustments={
+            "GENERAL": {"DOCTOR": 3},
+            "SURGERY": {"DOCTOR": 2},
+        },
+        replications=5,
+    )
+
+    contribs = result.get("per_change_contributions")
+    assert contribs is not None
+    assert len(contribs) == 2
+
+    by_dept = {c["department"]: c for c in contribs}
+    assert "GENERAL" in by_dept
+    assert "SURGERY" in by_dept
+
+    gen_contrib = by_dept["GENERAL"]
+    assert gen_contrib["delta"] == 3
+    assert gen_contrib["impact"] in ("primary_driver", "positive")
+    assert gen_contrib["delta_censoring_aware_wait"] <= 0.0
+    assert gen_contrib["delta_end_queue"] <= 0.0
+
+    surg_contrib = by_dept["SURGERY"]
+    assert surg_contrib["delta"] == 2
+    assert surg_contrib["impact"] == "no_effect"
+    assert surg_contrib["delta_censoring_aware_wait"] == 0.0
+    assert surg_contrib["delta_end_queue"] == 0.0
+    assert surg_contrib["delta_patients_completed"] == 0.0
 
 
 def test_p_value_formatting_no_zero_p_values():

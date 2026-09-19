@@ -48,6 +48,8 @@ export interface Metrics {
   censoring_aware_wait_minutes?: number
   p90_wait_minutes?: number
   end_queue_length?: number
+  sla_violations_all?: number
+  sla_violations_completed?: number
   average_treatment_minutes?: number
   wait_by_urgency: Record<string, { average: number; max: number }>
   sla_violations: number
@@ -60,6 +62,8 @@ export interface WhatIfDelta {
   censoring_aware_wait_minutes?: number
   p90_wait_minutes?: number
   end_queue_length?: number
+  sla_violations_all?: number
+  sla_violations_completed?: number
   wait_change_percent: number
   sla_violations: number
   patients_completed: number
@@ -124,6 +128,12 @@ export interface StatisticalSummary {
   p_value_sla_formatted?: string
   sla_significant?: boolean
 
+  mean_delta_sla_all?: number
+  ci_sla_all_95?: [number, number]
+  p_value_sla_all?: number
+  p_value_sla_all_formatted?: string
+  sla_all_significant?: boolean
+
   is_significant: boolean
   zero_variance?: {
     wait: boolean
@@ -131,11 +141,13 @@ export interface StatisticalSummary {
     queue?: boolean
     comp: boolean
     sla: boolean
+    sla_all?: boolean
   }
   holm_bonferroni?: {
     adj_p_wait: number
     adj_p_comp: number
     adj_p_sla: number
+    adj_p_sla_all?: number
     adj_p_censored_wait?: number
     adj_p_queue?: number
   }
@@ -144,6 +156,19 @@ export interface StatisticalSummary {
 export interface WhatIfMessage {
   type: 'empty_queue' | 'not_bottleneck' | 'significant' | 'improvement' | 'mixed' | 'worse' | 'no_demand'
   text: string
+}
+
+export interface PerChangeContribution {
+  department: string
+  resource: string
+  delta: number
+  display: string
+  delta_censoring_aware_wait: number
+  delta_end_queue: number
+  delta_patients_completed: number
+  delta_sla_all: number
+  impact: 'primary_driver' | 'positive' | 'neutral' | 'no_effect'
+  impact_label: string
 }
 
 export interface WhatIfResponse {
@@ -155,6 +180,7 @@ export interface WhatIfResponse {
   counterfactual: Metrics
   delta: WhatIfDelta
   applied_changes?: AppliedChange[]
+  per_change_contributions?: PerChangeContribution[]
   fork_context?: ForkContext
   statistical_summary?: StatisticalSummary
   message?: WhatIfMessage
