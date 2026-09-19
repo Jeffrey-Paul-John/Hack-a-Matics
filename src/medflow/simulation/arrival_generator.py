@@ -5,7 +5,8 @@ import random, uuid
 from ..core.models import DepartmentType, Patient, ResourceType, Urgency
 class ArrivalGenerator:
     """Produces reproducible walk-in and ambulance arrivals from configurable rates."""
-    def __init__(self, config: dict, seed: int): self.config, self.rng = config, random.Random(seed)
+    def __init__(self, config: dict, seed: int):
+        self.config, self.seed, self.rng = config, seed, random.Random(seed)
     def next_after(self, now: datetime) -> tuple[datetime, str]:
         """Sample competing exponential processes and return the earliest arrival class."""
         rates = self.config["arrival_rates_per_hour"]
@@ -25,4 +26,22 @@ class ArrivalGenerator:
         dept_caps = self.config["capacities"].get(dept_name, {})
         req_keys = [k for k in dept_caps.keys() if k != "AMBULANCE"] or list(dept_caps.keys())
         requirements = [ResourceType(k) if k in ResourceType._value2member_map_ else k for k in req_keys]
-        return Patient(id=f"P{sequence:04d}", name=f"Patient {sequence:04d}", arrival_time=when, wait_start=when, urgency=urgency, department_needed=department, resource_requirements=requirements)
+        
+        # Pre-assign service duration deterministically at generation time
+        base_service = float(self.config["service_minutes"].get(urgency.value, 45.0))
+        sub_rng = random.Random(f"{self.seed}:P{sequence:04d}")
+        service_duration = round(base_service * sub_rng.uniform(0.9, 1.1), 1)
+        escalation_risk = round(sub_rng.uniform(0.0, 1.0), 4)
+
+        return Patient(
+            id=f"P{sequence:04d}",
+            name=f"Patient {sequence:04d}",
+            arrival_time=when,
+            wait_start=when,
+            urgency=urgency,
+            department_needed=department,
+            resource_requirements=requirements,
+            service_duration_minutes=service_duration,
+            escalation_risk=escalation_risk,
+        )
+

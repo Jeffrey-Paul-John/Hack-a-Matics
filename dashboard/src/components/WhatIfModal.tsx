@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   X,
   Sparkles,
@@ -12,6 +12,7 @@ import {
   Plus,
   Minus,
   RefreshCw,
+  Lightbulb,
 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Strategy, WhatIfResponse } from '../api/types'
@@ -32,35 +33,36 @@ interface PresetOption {
 
 const PRESETS: PresetOption[] = [
   {
-    label: '+2 Nurses (Emergency)',
+    label: '+2 Nurses (ER)',
     desc: 'Rapid surge coverage for ER triage & stabilization',
-    adjustments: { emergency: { nurses: 2 } },
+    adjustments: { ER: { NURSE: 2 } },
   },
   {
-    label: '+1 ICU Bed',
-    desc: 'Relieve critical intensive care boarding bottleneck',
-    adjustments: { intensive_care: { beds: 1 } },
+    label: '+2 Doctors (ER)',
+    desc: 'Relieve primary emergency doctor consultation bottleneck',
+    adjustments: { ER: { DOCTOR: 2 } },
   },
   {
-    label: '+2 Beds & +1 Nurse (General)',
-    desc: 'Expedite ward transfers and lower queue buildup',
-    adjustments: { general_ward: { beds: 2, nurses: 1 } },
+    label: '+2 Doctors (General Ward)',
+    desc: 'Unblock inpatient admissions & relieve holding queues',
+    adjustments: { GENERAL: { DOCTOR: 2 } },
   },
   {
-    label: '+1 Doctor & +2 Nurses (Surgery)',
-    desc: 'Unblock surgical post-op throughput',
-    adjustments: { surgery: { doctors: 1, nurses: 2 } },
+    label: '+2 Beds (ICU)',
+    desc: 'Expand critical intensive care capacity for severe transfers',
+    adjustments: { ICU: { BED: 2 } },
   },
 ]
 
 export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware' }: WhatIfModalProps) {
   const [horizonMinutes, setHorizonMinutes] = useState<number>(60)
-  const [selectedDept, setSelectedDept] = useState<string>('emergency')
-  const [selectedRes, setSelectedRes] = useState<string>('nurses')
+  const [replications, setReplications] = useState<number>(20)
+  const [selectedDept, setSelectedDept] = useState<string>('ER')
+  const [selectedRes, setSelectedRes] = useState<string>('NURSE')
   const [qty, setQty] = useState<number>(2)
   const [strategyOverride, setStrategyOverride] = useState<Strategy | ''>('')
   const [customAdjustments, setCustomAdjustments] = useState<Record<string, Record<string, number>>>({
-    emergency: { nurses: 2 },
+    ER: { NURSE: 2 },
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -68,8 +70,126 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
   const [error, setError] = useState<string | null>(null)
 
   const notify = useSimulationStore(s => s.notify)
+  const liveState = useSimulationStore(s => s.state)
+
+  // Register Escape shortcut with cleanup; active only when modal is open
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
+
+  // Live state computations for fork context
+  const liveQueues = liveState?.queues
+  const liveResources = liveState?.resources
+
+  const liveQueueTotal = liveQueues
+    ? Object.values(liveQueues).reduce((acc, q) => acc + (q?.length || 0), 0)
+    : 0
+
+  const departmentQueues: Record<string, number> = liveQueues
+    ? Object.fromEntries(Object.entries(liveQueues).map(([d, q]) => [d, q?.length || 0]))
+    : {}
+
+  // Find current bottleneck from live state (highest utilization)
+  const liveBottleneck = (() => {
+    if (!liveResources) return null
+    let maxUtil = -1
+    let bn: {
+      department: string
+      resource: string
+      label: string
+      utilization: number
+      available: number
+      total: number
+    } | null = null
+
+    for (const [dept, pools] of Object.entries(liveResources)) {
+      for (const [res, pool] of Object.entries(pools)) {
+        if (pool && pool.total > 0) {
+          const util = pool.occupied / pool.total
+          if (util > maxUtil) {
+            maxUtil = util
+            const resLabel = res.charAt(0) + res.slice(1).toLowerCase()
+            bn = {
+              department: dept,
+              resource: res,
+              label: `${dept} ${resLabel}`,
+              utilization: util,
+              available: pool.available ?? (pool.total - pool.occupied),
+              total: pool.total,
+            }
+          }
+        }
+      }
+    }
+    return bn
+  })()
+
+  // Active fork context (prefer fork_context from simulation result, fallback to live)
+  const activeForkContext = result?.fork_context
+  const displayedWaiting = activeForkContext ? activeForkContext.total_waiting : liveQueueTotal
+  const displayedDeptQueues = activeForkContext ? activeForkContext.department_queues : departmentQueues
+  // Bottleneck = "none" when total_waiting == 0
+  const activeBottleneck = displayedWaiting === 0 ? null : (activeForkContext?.bottleneck ?? liveBottleneck)
+
+  // Surgery resource demand warning
+  const isSurgerySelected = selectedDept.toUpperCase() === 'SURGERY'
+  const isSurgeryStaged = Object.keys(customAdjustments).some(
+    d => d.toUpperCase() === 'SURGERY' && Object.values(customAdjustments[d] || {}).some(v => v > 0)
+  )
+  const showSurgeryWarning = isSurgerySelected || isSurgeryStaged
+
+  // Smarter scenarios: Suggest bottleneck scenario
+  const handleSuggestBottleneckScenario = () => {
+    if (displayedWaiting === 0 || !activeBottleneck) {
+      notify('No active bottleneck detected - hospital has an empty queue or is well below capacity.', 'info')
+      return
+    }
+    const deptKey = activeBottleneck.department
+    const resKey = activeBottleneck.resource
+    setCustomAdjustments({
+      [deptKey]: { [resKey]: 2 },
+    })
+    setSelectedDept(deptKey)
+    setSelectedRes(resKey)
+    setQty(2)
+    notify(`Suggested scenario: +2 ${activeBottleneck.label} (currently ${(activeBottleneck.utilization * 100).toFixed(0)}% utilized)`, 'success')
+  }
+
+  // Detect if staged delta is for a non-bottleneck resource
+  const isNonBottleneckStaged = (() => {
+    if (displayedWaiting === 0 || !activeBottleneck || Object.keys(customAdjustments).length === 0) return false
+    // If only surgery is staged, the surgery-specific warning takes precedence
+    if (isSurgeryStaged && Object.keys(customAdjustments).length === 1) return false
+    // Only warn if the bottleneck is actually under significant load (>60%)
+    if (activeBottleneck.utilization < 0.6) return false
+
+    const bnDept = activeBottleneck.department.toUpperCase()
+    const bnRes = activeBottleneck.resource.toUpperCase()
+
+    for (const [dept, pools] of Object.entries(customAdjustments)) {
+      const dUpper = dept.toUpperCase()
+      for (const [res, count] of Object.entries(pools)) {
+        if (count > 0) {
+          const rUpper = res.toUpperCase()
+          const deptMatch =
+            dUpper === bnDept ||
+            (dUpper === 'EMERGENCY' && bnDept === 'ER') ||
+            (dUpper === 'GENERAL_WARD' && bnDept === 'GENERAL') ||
+            (dUpper === 'INTENSIVE_CARE' && bnDept === 'ICU')
+          const resMatch = rUpper.startsWith(bnRes.substring(0, 3)) || bnRes.startsWith(rUpper.substring(0, 3))
+          if (deptMatch && resMatch) return false
+        }
+      }
+    }
+    return true
+  })()
 
   const handleApplyPreset = (preset: PresetOption) => {
     setCustomAdjustments(preset.adjustments)
@@ -114,8 +234,10 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
     try {
       const res = await api.whatIf({
         adjustments: customAdjustments,
+        resource_adjustments: customAdjustments,
         horizon_minutes: horizonMinutes,
         strategy_override: strategyOverride ? (strategyOverride as Strategy) : null,
+        replications,
       })
       setResult(res)
     } catch (err: unknown) {
@@ -167,13 +289,62 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
           </button>
         </div>
 
+        {/* Live Queue & Fork Context Strip */}
+        <div className="bg-slate-100/90 border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 px-2.5 py-1 rounded-full shadow-2xs">
+              <span
+                className={`w-2 h-2 rounded-full ${displayedWaiting > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}
+              />
+              <span className="font-bold text-slate-900">
+                Live queue: {displayedWaiting} waiting
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-slate-600 font-mono text-[11px]">
+              <span>Queues:</span>
+              {Object.entries(displayedDeptQueues).map(([dept, count]) => (
+                <span key={dept} className="bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-700 font-semibold">
+                  <strong>{dept}:</strong> {count}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">Current Bottleneck:</span>
+            {displayedWaiting === 0 || !activeBottleneck ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold text-[11px]">
+                None (0 waiting)
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 font-semibold text-[11px] flex items-center gap-1">
+                <span>{activeBottleneck.label}</span>
+                <span className="text-[10px] font-mono">({(activeBottleneck.utilization * 100).toFixed(0)}% util)</span>
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Scrollable Content */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-          {/* Presets Row */}
+          {/* Quick Scenarios Row with Suggest Bottleneck Scenario Button */}
           <div>
-            <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-2 font-mono">
-              Quick Scenarios
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block font-mono">
+                Quick Scenarios
+              </label>
+              {activeBottleneck && (
+                <button
+                  type="button"
+                  onClick={handleSuggestBottleneckScenario}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-bold text-[11px] transition-all cursor-pointer shadow-2xs"
+                >
+                  <Lightbulb size={13} className="text-amber-500" />
+                  <span>Suggest scenario (+2 {activeBottleneck.label})</span>
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               {PRESETS.map((preset, idx) => (
                 <button
@@ -214,10 +385,10 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   onChange={e => setSelectedDept(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-400 cursor-pointer capitalize"
                 >
-                  <option value="emergency">Emergency (ER)</option>
-                  <option value="intensive_care">Intensive Care (ICU)</option>
-                  <option value="general_ward">General Ward</option>
-                  <option value="surgery">Surgery</option>
+                  <option value="ER">Emergency (ER)</option>
+                  <option value="ICU">Intensive Care (ICU)</option>
+                  <option value="GENERAL">General Ward</option>
+                  <option value="SURGERY">Surgery</option>
                 </select>
               </div>
 
@@ -230,9 +401,9 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   onChange={e => setSelectedRes(e.target.value)}
                   className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-400 cursor-pointer capitalize"
                 >
-                  <option value="nurses">Nurses</option>
-                  <option value="beds">Beds</option>
-                  <option value="doctors">Doctors</option>
+                  <option value="NURSE">Nurses</option>
+                  <option value="DOCTOR">Doctors</option>
+                  <option value="BED">Beds</option>
                 </select>
               </div>
 
@@ -271,6 +442,35 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
               </div>
             </div>
 
+            {/* Surgery Warning Banner */}
+            {showSurgeryWarning && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-start gap-2 animate-fadeIn">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">No Patients Use This Resource: </span>
+                  <span>
+                    Surgery has no patient demand in this simulation model, so adding capacity here will not affect wait times or throughput.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Non-bottleneck Warning Banner */}
+            {isNonBottleneckStaged && (
+              <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-start gap-2 animate-fadeIn">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Non-Bottleneck Resource Staged: </span>
+                  <span>
+                    You are adding capacity to resources other than the current primary bottleneck (
+                    <strong>{activeBottleneck?.label}</strong> at{' '}
+                    {((activeBottleneck?.utilization ?? 0) * 100).toFixed(0)}% utilization). This may result in no
+                    measurable improvement in patient wait times.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Active Adjustments Badges */}
             <div className="pt-2 border-t border-slate-200/80">
               <span className="text-[10px] font-semibold text-slate-500 uppercase block mb-1.5">
@@ -278,52 +478,62 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
               </span>
               {Object.keys(customAdjustments).length === 0 ? (
                 <span className="text-[11px] text-slate-400 italic">
-                  No adjustments staged. Add some above or pick a quick scenario.
+                  No adjustments staged. Add some above or click "Suggest scenario".
                 </span>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(customAdjustments).flatMap(([dept, pools]) =>
-                    Object.entries(pools).map(([res, count]) => (
-                      <span
-                        key={`${dept}-${res}`}
-                        className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-full text-xs font-semibold"
-                      >
-                        <span className="capitalize">{dept.replace('_', ' ')}:</span>
-                        <strong className="text-indigo-950">+{count} {res}</strong>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAdjustment(dept, res)}
-                          className="hover:text-red-600 cursor-pointer ml-1"
-                          title="Remove adjustment"
+                    Object.entries(pools).map(([res, count]) => {
+                      const depUpper = dept.toUpperCase()
+                      const pluralRes = res.toLowerCase().endsWith('s')
+                        ? res.charAt(0).toUpperCase() + res.slice(1).toLowerCase()
+                        : res.charAt(0).toUpperCase() + res.slice(1).toLowerCase() + 's'
+                      const basePool = liveResources?.[depUpper]?.[res.toUpperCase()]
+                      const baseCount = basePool?.total ?? 0
+                      const targetCount = baseCount + count
+                      const chipLabel = `${depUpper} ${pluralRes}: ${baseCount} -> ${targetCount} (+${count})`
+
+                      return (
+                        <span
+                          key={`${dept}-${res}`}
+                          className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-800 px-2.5 py-1 rounded-full text-xs font-semibold"
                         >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))
+                          <strong className="text-indigo-950 font-mono">{chipLabel}</strong>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAdjustment(dept, res)}
+                            className="hover:text-red-600 cursor-pointer ml-1"
+                            title="Remove adjustment"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      )
+                    })
                   )}
                 </div>
               )}
             </div>
 
-            {/* Horizon & Strategy Override */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {/* Horizon, Replications & Strategy Override */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
                   Simulation Horizon
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[30, 60, 120].map(h => (
+                <div className="grid grid-cols-5 gap-1">
+                  {[30, 60, 120, 240, 480].map(h => (
                     <button
                       key={h}
                       type="button"
                       onClick={() => setHorizonMinutes(h)}
-                      className={`py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                      className={`py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
                         horizonMinutes === h
                           ? 'bg-slate-900 text-white border-slate-900'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
-                      {h} mins
+                      {h}m
                     </button>
                   ))}
                 </div>
@@ -331,7 +541,29 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
 
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
-                  Strategy Override (Optional)
+                  CRN Replications
+                </label>
+                <div className="grid grid-cols-3 gap-1">
+                  {[10, 20, 30].map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReplications(r)}
+                      className={`py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                        replications === r
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {r} reps
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 uppercase block mb-1">
+                  Strategy Override
                 </label>
                 <select
                   value={strategyOverride}
@@ -346,6 +578,17 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                 </select>
               </div>
             </div>
+
+            {/* Small Baseline Queue Guidance */}
+            {displayedWaiting > 0 && displayedWaiting <= 5 && horizonMinutes <= 60 && (
+              <div className="p-3 bg-sky-50 border border-sky-200 text-sky-900 rounded-xl text-xs flex items-start gap-2 animate-fadeIn">
+                <Lightbulb size={16} className="text-sky-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  <span className="font-bold">Small baseline queue ({displayedWaiting} waiting): </span>
+                  With only {displayedWaiting} waiting and a {horizonMinutes}-minute horizon, even the right fix may show a small effect. If the improvement is hard to see, use <strong>Emergency Surge</strong> to build a larger queue, or go to <strong>120m</strong> or <strong>240m</strong>.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Error Banner */}
@@ -359,38 +602,210 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
           {/* Results Comparison View */}
           {result && (
             <div className="space-y-4 animate-fadeIn">
-              {/* Executive Summary Recommendation Card */}
-              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 text-emerald-950 flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5">
-                  <CheckCircle2 size={18} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-emerald-900">
-                    {result.delta.wait_minutes < 0
-                      ? `✨ Wait Times Reduced by ${Math.abs(result.delta.wait_change_percent).toFixed(1)}%`
-                      : result.delta.wait_minutes === 0
-                      ? 'No Change in Wait Times'
-                      : 'Wait Times Slightly Elevated'}
-                  </h4>
-                  <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
-                    Forked hospital simulation over a <strong className="font-bold">{result.horizon_minutes}-minute horizon</strong> demonstrates that adding staged capacity{' '}
-                    {result.delta.wait_minutes < 0 ? (
-                      <>
-                        cuts average patient waiting time by{' '}
-                        <strong>{Math.abs(result.delta.wait_minutes).toFixed(1)} minutes</strong>
-                      </>
+              {/* Honest Messaging Banner Chosen Directly from Data */}
+              {result.message && (
+                <div
+                  className={`p-4 rounded-xl border flex items-start gap-3 shadow-xs ${
+                    result.message.type === 'empty_queue'
+                      ? 'bg-amber-50 border-amber-200 text-amber-900'
+                      : result.message.type === 'no_demand'
+                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                      : result.message.type === 'not_bottleneck'
+                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                      : result.statistical_summary?.is_significant
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      result.message.type === 'empty_queue' || result.message.type === 'no_demand'
+                        ? 'bg-amber-500 text-white'
+                        : result.message.type === 'not_bottleneck'
+                        ? 'bg-amber-600 text-white'
+                        : result.statistical_summary?.is_significant
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-700 text-white'
+                    }`}
+                  >
+                    {result.message.type === 'empty_queue' || result.message.type === 'no_demand' || result.message.type === 'not_bottleneck' ? (
+                      <AlertTriangle size={18} />
                     ) : (
-                      'maintains existing queue equilibrium'
+                      <CheckCircle2 size={18} />
                     )}
-                    {result.delta.sla_violations < 0 && (
-                      <>
-                        {' '}and prevents <strong className="text-emerald-950">{Math.abs(result.delta.sla_violations)} critical SLA breach(es)</strong>
-                      </>
-                    )}
-                    .
-                  </p>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm">
+                        {result.message.type === 'empty_queue'
+                          ? 'Empty Queue (No Relievable Congestion)'
+                          : result.message.type === 'no_demand'
+                          ? 'No Patient Demand for Resource'
+                          : result.message.type === 'not_bottleneck'
+                          ? 'No Measurable Relieving Effect'
+                          : result.statistical_summary?.is_significant
+                          ? '✨ Statistically Significant Improvement'
+                          : 'Operational Result'}
+                      </h4>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-white/70 font-semibold border">
+                        {result.statistical_summary?.replications ?? replications} CRN Replications
+                      </span>
+                    </div>
+                    <p className="text-xs mt-1 leading-relaxed font-medium">
+                      {result.message.text}
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Applied Capacity Changes Display */}
+              {result.applied_changes && result.applied_changes.length > 0 && (
+                <div className="bg-slate-100 border border-slate-200 rounded-xl p-3 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-600 uppercase font-mono">
+                      Applied Changes:
+                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {result.applied_changes.map((change, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-mono text-xs font-bold shadow-xs flex items-center gap-1.5"
+                        >
+                          <span>{change.display}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Forked copy isolated • Live engine unmutated
+                  </span>
+                </div>
+              )}
+
+              {/* Statistical Validity & Multi-Metric Holm-Bonferroni Significance */}
+              {result.statistical_summary && (
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono text-slate-700">
+                      Statistical Validity & Multi-Metric Holm-Bonferroni Correction
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        result.statistical_summary.is_significant
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {result.statistical_summary.is_significant
+                        ? 'Significant (95% CI excludes 0)'
+                        : 'Not Significant (95% CI includes 0)'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    {/* Wait Time Metric */}
+                    {(() => {
+                      const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.wait ||
+                        (result.statistical_summary.ci_wait_95[0] === 0 && result.statistical_summary.ci_wait_95[1] === 0 && result.delta.wait_minutes === 0)
+                      )
+                      return (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Avg Wait Delta</span>
+                            {result.statistical_summary.wait_significant && !isZeroVar && (
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                            )}
+                          </div>
+                          <strong className="text-slate-900 font-mono text-sm block mt-0.5">
+                            {result.delta.wait_minutes > 0 ? '+' : ''}
+                            {result.delta.wait_minutes.toFixed(2)} min
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${result.statistical_summary.ci_wait_95[0].toFixed(2)}, ${result.statistical_summary.ci_wait_95[1].toFixed(2)}]`}
+                          </span>
+                          {result.statistical_summary.holm_bonferroni && (
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              adj p = {isZeroVar ? 'n/a (no variation)' : (
+                                result.statistical_summary.holm_bonferroni.adj_p_wait < 0.001
+                                  ? '< 0.001'
+                                  : result.statistical_summary.holm_bonferroni.adj_p_wait.toFixed(3)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* Discharges Metric */}
+                    {(() => {
+                      const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.comp ||
+                        ((result.statistical_summary.ci_comp_95?.[0] ?? 0) === 0 && (result.statistical_summary.ci_comp_95?.[1] ?? 0) === 0 && (result.delta.patients_completed ?? 0) === 0)
+                      )
+                      return (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Discharges Delta</span>
+                            {result.statistical_summary.comp_significant && !isZeroVar && (
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                            )}
+                          </div>
+                          <strong className="text-slate-900 font-mono text-sm block mt-0.5">
+                            {result.delta.patients_completed > 0 ? '+' : ''}
+                            {result.delta.patients_completed.toFixed(1)} completed
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${result.statistical_summary.ci_comp_95?.[0].toFixed(1) ?? '0.0'}, ${result.statistical_summary.ci_comp_95?.[1].toFixed(1) ?? '0.0'}]`}
+                          </span>
+                          {result.statistical_summary.holm_bonferroni && (
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              adj p = {isZeroVar ? 'n/a (no variation)' : (
+                                result.statistical_summary.holm_bonferroni.adj_p_comp < 0.001
+                                  ? '< 0.001'
+                                  : result.statistical_summary.holm_bonferroni.adj_p_comp.toFixed(3)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* SLA Breaches Metric */}
+                    {(() => {
+                      const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.sla ||
+                        ((result.statistical_summary.ci_sla_95?.[0] ?? 0) === 0 && (result.statistical_summary.ci_sla_95?.[1] ?? 0) === 0 && (result.delta.sla_violations ?? 0) === 0)
+                      )
+                      return (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">SLA Breaches Delta</span>
+                            {result.statistical_summary.sla_significant && !isZeroVar && (
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                            )}
+                          </div>
+                          <strong className="text-slate-900 font-mono text-sm block mt-0.5">
+                            {result.delta.sla_violations > 0 ? '+' : ''}
+                            {result.delta.sla_violations.toFixed(1)} breaches
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${result.statistical_summary.ci_sla_95?.[0].toFixed(1) ?? '0.0'}, ${result.statistical_summary.ci_sla_95?.[1].toFixed(1) ?? '0.0'}]`}
+                          </span>
+                          {result.statistical_summary.holm_bonferroni && (
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              adj p = {isZeroVar ? 'n/a (no variation)' : (
+                                result.statistical_summary.holm_bonferroni.adj_p_sla < 0.001
+                                  ? '< 0.001'
+                                  : result.statistical_summary.holm_bonferroni.adj_p_sla.toFixed(3)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {/* Side by Side Comparative Metrics Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -417,7 +832,10 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       }`}
                     >
                       {result.delta.wait_minutes <= 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
-                      <span>{result.delta.wait_minutes <= 0 ? '' : '+'}{result.delta.wait_minutes.toFixed(1)}m</span>
+                      <span>
+                        {result.delta.wait_minutes <= 0 ? '' : '+'}
+                        {result.delta.wait_minutes.toFixed(1)}m
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -431,10 +849,14 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
-                        {result.counterfactual.sla_violations}
+                        {typeof result.counterfactual.sla_violations === 'number'
+                          ? result.counterfactual.sla_violations.toFixed(1)
+                          : result.counterfactual.sla_violations}
                       </div>
                       <div className="text-[10px] text-slate-400 line-through">
-                        Baseline: {result.baseline.sla_violations}
+                        Baseline: {typeof result.baseline.sla_violations === 'number'
+                          ? result.baseline.sla_violations.toFixed(1)
+                          : result.baseline.sla_violations}
                       </div>
                     </div>
                     <div
@@ -447,7 +869,7 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       {result.delta.sla_violations <= 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
                       <span>
                         {result.delta.sla_violations <= 0 ? '' : '+'}
-                        {result.delta.sla_violations}
+                        {result.delta.sla_violations.toFixed(1)}
                       </span>
                     </div>
                   </div>
@@ -462,10 +884,14 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
-                        {result.counterfactual.patients_completed}
+                        {typeof result.counterfactual.patients_completed === 'number'
+                          ? result.counterfactual.patients_completed.toFixed(1)
+                          : result.counterfactual.patients_completed}
                       </div>
                       <div className="text-[10px] text-slate-400 line-through">
-                        Baseline: {result.baseline.patients_completed}
+                        Baseline: {typeof result.baseline.patients_completed === 'number'
+                          ? result.baseline.patients_completed.toFixed(1)
+                          : result.baseline.patients_completed}
                       </div>
                     </div>
                     <div
@@ -477,7 +903,9 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                     >
                       <span>
                         {result.delta.patients_completed >= 0 ? '+' : ''}
-                        {result.delta.patients_completed}
+                        {typeof result.delta.patients_completed === 'number'
+                          ? result.delta.patients_completed.toFixed(1)
+                          : result.delta.patients_completed}
                       </span>
                     </div>
                   </div>
@@ -506,12 +934,12 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
               {isLoading ? (
                 <>
                   <RefreshCw size={13} className="animate-spin" />
-                  <span>Cloning State & Simulating...</span>
+                  <span>Simulating {replications} CRN Replications...</span>
                 </>
               ) : (
                 <>
                   <Sparkles size={13} />
-                  <span>Run Counterfactual Comparison</span>
+                  <span>Run Counterfactual ({replications} Reps)</span>
                 </>
               )}
             </button>

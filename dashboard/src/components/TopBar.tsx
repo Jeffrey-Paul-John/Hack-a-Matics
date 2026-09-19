@@ -10,6 +10,7 @@ interface TopBarProps {
   onSearch?: (term: string) => void
   onGuideMe?: () => void
   onOpenWhatIf?: () => void
+  showGlobalWhatIf?: boolean
 }
 
 export function TopBar({
@@ -20,6 +21,7 @@ export function TopBar({
   onSearch,
   onGuideMe,
   onOpenWhatIf,
+  showGlobalWhatIf = false,
 }: TopBarProps) {
   const { language, setLanguage } = useLanguageStore()
   const { t } = useTranslation()
@@ -28,10 +30,10 @@ export function TopBar({
   const isOffline = connectionStatus === 'disconnected' || !isConnected
 
   return (
-    <header className="h-16 bg-white border-b border-[#e2e8f0] px-6 flex items-center justify-between gap-4 sticky top-0 z-20">
-      {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2 text-xs font-semibold">
-        <span className="text-slate-400">MEDFLOW</span>
+    <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 sticky top-0 z-30">
+      {/* Breadcrumb Section with data-tour */}
+      <div data-tour="breadcrumb-nav" className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+        <span className="text-slate-400">MedFlow</span>
         <span className="text-slate-300">/</span>
         <span className="text-slate-900 font-bold capitalize">{activeTabTitle}</span>
       </div>
@@ -52,8 +54,8 @@ export function TopBar({
 
       {/* Top Right Controls & Status */}
       <div className="flex items-center gap-3">
-        {/* "What If?" Sandbox Direct Button */}
-        {onOpenWhatIf && (
+        {/* Optional Global "What If?" Sandbox Button (rendered only if explicitly requested) */}
+        {showGlobalWhatIf && onOpenWhatIf && (
           <button
             onClick={onOpenWhatIf}
             className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 transition-all text-xs font-bold shadow-xs cursor-pointer"

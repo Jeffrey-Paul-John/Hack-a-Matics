@@ -28,6 +28,9 @@ class Patient(BaseModel):
     treatment_start: Optional[datetime] = None
     actual_wait_minutes: float = 0.0
     treatment_duration_minutes: float = 0.0
+    service_duration_minutes: float = 0.0
+    escalation_risk: float = 0.0
+    icu_blocked_at_arrival: bool = False
     assigned_resources: dict[ResourceType | str, str] = Field(default_factory=dict)
     priority_score: float = 0.0
 

@@ -148,7 +148,7 @@ export function ExecutiveOverview({
 
   return (
     <div className="flex flex-col gap-6 pb-12">
-      {/* Page Header matching Sentinel Executive Overview */}
+      {/* Page Header: Executive Overview */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -160,7 +160,6 @@ export function ExecutiveOverview({
             <strong className="text-slate-800 uppercase font-mono">{strategy.replace('_', ' ')}</strong>
           </p>
         </div>
-
         {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -330,7 +329,7 @@ export function ExecutiveOverview({
         </div>
       </div>
 
-      {/* Middle Section: Chart and Capacity Snapshot matching Sentinel */}
+      {/* Middle Section: Chart and Capacity Snapshot */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Chart Card (2 columns): Hourly Trend */}
         <div data-tour="transmission-trend" className="sentinel-card lg:col-span-2 flex flex-col justify-between">
@@ -449,7 +448,7 @@ export function ExecutiveOverview({
                     fontSize: '12px',
                   }}
                 />
-                {/* 85% Dotted Threshold Line matching Sentinel */}
+                {/* 85% Dotted Threshold Line */}
                 <ReferenceLine
                   x={85}
                   stroke="#ef4444"
@@ -480,7 +479,7 @@ export function ExecutiveOverview({
         </div>
       </div>
 
-      {/* Bottom Section: Ward Risk Status & Policy Comparison matching Sentinel */}
+      {/* Bottom Section: Ward Risk Status & Policy Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Table (7 cols): Ward Risk Status */}
         <div className="sentinel-card lg:col-span-7">
@@ -638,7 +637,7 @@ export function ExecutiveOverview({
                                   <span>Simulating 120 Shifts…</span>
                                 </span>
                               ) : (
-                                <span>Run 30-Replication Evaluation</span>
+                                <span>Go to Policy Testing</span>
                               )}
                             </button>
                           )}

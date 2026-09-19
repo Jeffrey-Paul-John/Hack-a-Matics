@@ -77,6 +77,11 @@ If a request conflicts with these rules, decline that part in one short, friendl
 {dept_breakdown}
 
 Answer the user's inquiry concisely, professionally, and accurately using the live telemetry data above.
+1. ALWAYS format key counts, quantities, metrics, and availability in markdown bold (**value**), for example:
+   - "There are **5 ICU beds** currently free (**5/5 available**)."
+   - "Current queue status: **0 patients waiting (0 CRITICAL urgency)**."
+   - "There are currently **0 active SLA breaches**."
+2. ALWAYS ensure clean spacing between digits and words (e.g., write "**5 ICU beds**", never "5ICU").
 """
 
 
@@ -182,6 +187,35 @@ def detect_input_language(text: str) -> str | None:
     return None
 
 
+def clean_and_format_reply(text: str) -> str:
+    """Ensure proper word/digit spacing and bold formatting for clinical metrics and resource counts."""
+    if not text:
+        return text
+
+    # 1. Separate numbers squished directly into words (e.g. 5ICU -> 5 ICU, 10beds -> 10 beds),
+    # preserving ordinals like 1st, 2nd, 3rd, 4th
+    cleaned = re.sub(r'\b(\d+)(?!(?:st|nd|rd|th)\b)([a-zA-Z]+)\b', r'\1 \2', text)
+    cleaned = re.sub(r'\b([a-zA-Z]+)(\d+)\b', r'\1 \2', cleaned)
+
+    # 2. Bold unbolded counts like "5 ICU beds", "0 active SLA breaches", "0 patients waiting"
+    cleaned = re.sub(
+        r'(?<!\*\*)(\b\d+\s+(?:ICU\s+)?(?:beds?|doctors?|nurses?|ambulances?|patients?(?:\s+waiting)?|ventilators?|active SLA breaches?)\b)(?!\*\*)',
+        r'**\1**',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    # 3. Bold availability ratios like "(5/5 available)"
+    cleaned = re.sub(
+        r'(?<!\*\*)(\b\d+/\d+\s+available\b)(?!\*\*)',
+        r'**\1**',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+
+    return cleaned
+
+
 def answer_clinical_query(engine: SimulationEngine, message: str, language: str = "en") -> str:
     """Analyze query and compute response dynamically using live simulation state, Groq LLM, and Sarvam."""
     state = engine.state()
@@ -208,7 +242,7 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
     dept_lines = []
     for dept_name, pool in resources.items():
         pool_details = [
-            f"{k.replace('_', ' ')}: {v.get('available', max(0, v.get('total', 0) - v.get('occupied', 0)))}/{v.get('total', 0)} avail"
+            f"{k.replace('_', ' ').capitalize()}: {v.get('available', max(0, v.get('total', 0) - v.get('occupied', 0)))}/{v.get('total', 0)} available"
             for k, v in pool.items()
         ]
         dept_lines.append(f"  * {dept_name}: " + ", ".join(pool_details))
@@ -250,7 +284,7 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
                     tot = pool.get("total", 0)
                     free = pool.get("available", max(0, tot - occ))
                     down = pool.get("down", 0)
-                    details.append(f"{kind.replace('_', ' ')}: {free}/{tot} available ({occ} occupied{f', {down} offline' if down else ''})")
+                    details.append(f"{kind.replace('_', ' ').capitalize()}: **{free}/{tot} available** ({occ} occupied{f', {down} offline' if down else ''})")
                 llm_response = f"At simulation time {sim_time}, {dept_match} status: " + ", ".join(details) + "."
             else:
                 total_occ = sum(p.get("occupied", 0) for d in resources.values() for p in d.values())
@@ -258,26 +292,29 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
                 total_free = sum(p.get("available", max(0, p.get("total", 0) - p.get("occupied", 0))) for d in resources.values() for p in d.values())
                 total_down = sum(p.get("down", 0) for d in resources.values() for p in d.values())
                 llm_response = (
-                    f"At simulation time {sim_time}, hospital-wide capacity: {total_free} assets available, "
-                    f"{total_occ} occupied out of {total_cap} total"
+                    f"At simulation time {sim_time}, hospital-wide capacity: **{total_free} assets available**, "
+                    f"**{total_occ} occupied** out of **{total_cap} total**"
                     f"{f' ({total_down} offline)' if total_down else ''}."
                 )
         elif any(k in msg_lower for k in ("wait", "delay", "queue", "line", "sla", "breach")):
             llm_response = (
-                f"At simulation time {sim_time}: {total_waiting} patients are waiting in triage queues "
-                f"({critical_waiting} CRITICAL). Average wait time is {avg_wait:.1f} minutes. "
-                f"SLA breaches: {sla_breaches}. Completed care: {completed} patients."
+                f"At simulation time {sim_time}: **{total_waiting} patients are waiting** in triage queues "
+                f"(**{critical_waiting} CRITICAL**). Average wait time is **{avg_wait:.1f} minutes**. "
+                f"SLA breaches: **{sla_breaches}**. Completed care: **{completed} patients**."
             )
         elif any(k in msg_lower for k in ("strategy", "policy", "algorithm", "triage")):
             llm_response = (
-                f"At simulation time {sim_time}: Active allocation policy is {active_strategy}. "
+                f"At simulation time {sim_time}: Active allocation policy is **{active_strategy}**. "
                 f"Triage prioritizes patients dynamically based on clinical urgency and system load."
             )
         else:
             llm_response = (
-                f"MedFlow Copilot [Time {sim_time}]: {total_waiting} patients waiting ({critical_waiting} CRITICAL). "
-                f"Average wait {avg_wait:.1f} min across {completed} completed patients. SLA breaches: {sla_breaches}."
+                f"MedFlow Copilot [Time {sim_time}]: **{total_waiting} patients waiting** (**{critical_waiting} CRITICAL**). "
+                f"Average wait **{avg_wait:.1f} min** across **{completed} completed patients**. SLA breaches: **{sla_breaches}**."
             )
+
+    # Clean formatting and ensure bold counts / correct digit-word spacing
+    llm_response = clean_and_format_reply(llm_response)
 
     # 2. Multilingual support: Translate via Sarvam AI if an Indian language is requested or detected
     if effective_language != "en" and effective_language in SARVAM_LANG_MAP:

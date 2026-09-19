@@ -220,3 +220,36 @@ All clinical parameters are externalized in [config/config.yaml](file:///c:/User
 - **Math Layer Tolerances**: Convergence criteria and allowable theoretical variation thresholds.
 
 Zero magic numbers exist in the codebase.
+
+---
+
+## Text-to-Speech & Voice Copilot (Sarvam AI Bulbul:v3)
+
+MedFlow features an optional, privacy-preserving, spoken clinical voice copilot powered by Sarvam AI (`bulbul:v3`).
+
+### Environment Variables
+Configure these variables in your `.env` file:
+```bash
+# Feature Flag (Default: false)
+VOICE_ENABLED=true
+
+# Sarvam AI API Key (Never exposed to frontend)
+SARVAM_API_KEY=your_sarvam_api_key_here
+
+# Default Voice Persona ("shubh" or "simran")
+DEFAULT_VOICE=shubh
+```
+
+### Endpoints
+- `GET /tts/config`: Returns voice service status (`enabled: boolean`), available voice personas, default voice, and character limits.
+- `POST /tts/speak`: Synthesizes spoken audio bytes (`audio/wav`) for verified session message IDs or server-redacted text with pace clamping (`[0.5, 2.0]`), IP sliding-window rate limiting (60 req/min), and daily caps (1000 req/day).
+
+### Privacy & Clinical Safeguards
+- **Server-Side Redaction**: Automatic regex scrubbing of MRNs, patient full names, phone numbers, and dates of birth before audio synthesis.
+- **Log Isolation**: Strictly logs latency, response status, and byte sizes; zero clinical text or prompts are logged.
+- **Session-Bound Message Verification**: Cross-session message ID access is rejected with `404 Not Found`.
+
+### How to Add a New Voice
+1. In `src/medflow/services/tts_service.py`, add the new speaker ID to `ALLOWED_VOICES` (e.g. `ALLOWED_VOICES = {"shubh", "simran", "new_speaker"}`).
+2. In `src/medflow/api/tts_router.py`, add the voice descriptor to the `GET /tts/config` payload.
+3. The frontend dynamically discovers available voices from `/tts/config` and renders them in the voice selector.

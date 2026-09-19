@@ -17,7 +17,8 @@
 }
 
 @layer components {
-  /* Sentinel Style Cards & Containers */
+  /* MedFlow Style Cards & Containers */
+  .medflow-card,
   .sentinel-card {
     @apply bg-white border border-[#e2e8f0] rounded-xl p-5 shadow-sentinel transition-shadow hover:shadow-md;
   }
@@ -137,18 +138,22 @@
   }
 
   /* Data Table */
+  .medflow-table,
   .sentinel-table {
     @apply w-full border-collapse text-left text-xs;
   }
 
+  .medflow-table th,
   .sentinel-table th {
     @apply py-2.5 px-3 border-b border-slate-100 font-data text-[10px] font-bold uppercase tracking-wider text-slate-400;
   }
 
+  .medflow-table td,
   .sentinel-table td {
     @apply py-3 px-3 border-b border-slate-50 text-slate-700 font-medium;
   }
 
+  .medflow-table tr:hover td,
   .sentinel-table tr:hover td {
     @apply bg-slate-50/70;
   }
@@ -315,5 +320,38 @@
 
 .driver-popover.medflow-tour-popover .driver-popover-close-btn:hover {
   color: #0f172a !important;
+}
+
+/* TTS Equalizer Bar Animations & Accessibility */
+@keyframes equalizer-bar-1 {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
+@keyframes equalizer-bar-2 {
+  0%, 100% { height: 12px; }
+  50% { height: 5px; }
+}
+@keyframes equalizer-bar-3 {
+  0%, 100% { height: 6px; }
+  50% { height: 15px; }
+}
+
+.animate-bar-1 {
+  animation: equalizer-bar-1 0.75s ease-in-out infinite;
+}
+.animate-bar-2 {
+  animation: equalizer-bar-2 0.75s ease-in-out infinite 0.18s;
+}
+.animate-bar-3 {
+  animation: equalizer-bar-3 0.75s ease-in-out infinite 0.36s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bar-1,
+  .animate-bar-2,
+  .animate-bar-3 {
+    animation: none !important;
+    height: 8px !important;
+  }
 }
 

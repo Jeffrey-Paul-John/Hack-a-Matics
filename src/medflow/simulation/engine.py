@@ -6,7 +6,15 @@ from ..core.allocator import Allocator
 from ..core.models import Department, DepartmentType, PatientStatus, Resource, ResourceStatus, ResourceType, Urgency
 from ..core.priority_engine import PriorityEngine
 from ..core.resource_manager import ResourceManager
-from ..core.strategies import ResourceAwareStrategy, SimulationContext, UrgencyOnlyStrategy, WaitAwareStrategy
+from ..core.strategies import (
+    FIFOStrategy,
+    RandomStrategy,
+    ResourceAwareStrategy,
+    SimulationContext,
+    StaticPriorityStrategy,
+    UrgencyOnlyStrategy,
+    WaitAwareStrategy,
+)
 from .arrival_generator import ArrivalGenerator
 from ..core.clock import SimulationClock
 from .metrics import MetricsCollector
@@ -17,9 +25,28 @@ class SimulationEngine:
         self.config, self.seed = deepcopy(config), seed if seed is not None else config["seed"]
         self.clock = SimulationClock(datetime(2026, 1, 1, tzinfo=timezone.utc)); self.departments = self._departments()
         self.manager = ResourceManager(self.departments); self.metrics = MetricsCollector(); self.generator = ArrivalGenerator(self.config, self.seed)
-        selector = strategy or config["priority"]["strategy"]; classes = {"urgency_only": UrgencyOnlyStrategy, "wait_aware": WaitAwareStrategy, "resource_aware": ResourceAwareStrategy, "mdp_optimal": MDPOptimalStrategy}
-        pr = config["priority"]; context = SimulationContext(config["urgency_weights"], pr["wait_weight"], pr["scarcity_weight"], pr["max_acceptable_wait_minutes"], {})
-        self.allocator = Allocator(self.manager, PriorityEngine(classes[selector](), context)); self.departures: list[tuple[datetime,str]] = []; self.next_arrival, self.source = self.generator.next_after(self.clock.now); self.sequence = 0; self.running = False
+        selector = strategy or config["priority"]["strategy"]
+        pr = config["priority"]
+        context = SimulationContext(config["urgency_weights"], pr["wait_weight"], pr["scarcity_weight"], pr["max_acceptable_wait_minutes"], {}, seed=self.seed)
+        self.allocator = Allocator(self.manager, PriorityEngine(self._build_strategy(selector), context)); self.departures: list[tuple[datetime,str]] = []; self.next_arrival, self.source = self.generator.next_after(self.clock.now); self.sequence = 0; self.running = False
+
+    def _build_strategy(self, strategy_name: str):
+        classes = {
+            "urgency_only": UrgencyOnlyStrategy,
+            "static_priority": StaticPriorityStrategy,
+            "wait_aware": WaitAwareStrategy,
+            "resource_aware": ResourceAwareStrategy,
+            "mdp_optimal": MDPOptimalStrategy,
+            "fifo": FIFOStrategy,
+            "random": RandomStrategy,
+        }
+        if strategy_name not in classes:
+            raise ValueError(f"Unknown strategy '{strategy_name}'. Valid: {list(classes.keys())}")
+        cls = classes[strategy_name]
+        if strategy_name == "random":
+            return cls(seed=self.seed)
+        return cls()
+
     def _departments(self) -> dict:
         result = {}
         for name, capacities in self.config["capacities"].items():
@@ -36,7 +63,24 @@ class SimulationEngine:
         """Advance to exactly one arrival or departure, then allocate feasible queue members."""
         next_departure = min(self.departures, default=(datetime.max.replace(tzinfo=timezone.utc), ""))
         if self.next_arrival <= next_departure[0]:
-            self.clock.advance_to(self.next_arrival); self.sequence += 1; patient = self.generator.patient(self.clock.now, self.source, self.sequence); self.departments[patient.department_needed].patient_queue.append(patient)
+            self.clock.advance_to(self.next_arrival); self.sequence += 1; patient = self.generator.patient(self.clock.now, self.source, self.sequence)
+            needs_icu = patient.department_needed in (DepartmentType.ICU, "ICU") or any(r in (ResourceType.ICU_BED, "ICU_BED") for r in patient.resource_requirements)
+            if needs_icu:
+                icu_dept = self.departments.get(DepartmentType.ICU) or self.departments.get("ICU")
+                free_beds = 0
+                if icu_dept:
+                    for r_type, pool in icu_dept.resource_pools.items():
+                        if r_type in (ResourceType.BED, ResourceType.ICU_BED, "BED", "ICU_BED"):
+                            free_beds += sum(1 for r in pool if r.status == ResourceStatus.AVAILABLE)
+                else:
+                    for dept in self.departments.values():
+                        for r_type, pool in dept.resource_pools.items():
+                            if r_type in (ResourceType.ICU_BED, "ICU_BED"):
+                                free_beds += sum(1 for r in pool if r.status == ResourceStatus.AVAILABLE)
+                blocked = (free_beds == 0)
+                patient.icu_blocked_at_arrival = blocked
+                self.metrics.record_icu_arrival(blocked=blocked)
+            self.departments[patient.department_needed].patient_queue.append(patient)
             self.next_arrival, self.source = self.generator.next_after(self.clock.now)
         else:
             self.clock.advance_to(next_departure[0]); self.departures.remove(next_departure); patient = self._patient(next_departure[1])
@@ -53,17 +97,15 @@ class SimulationEngine:
                     patient.status = PatientStatus.IN_TREATMENT
                     patient.treatment_start = self.clock.now
                     patient.actual_wait_minutes = round((self.clock.now - patient.wait_start).total_seconds() / 60, 2)
-                    service = self.config["service_minutes"][patient.urgency.value]
+                    service = patient.service_duration_minutes if patient.service_duration_minutes > 0 else self.config["service_minutes"][patient.urgency.value]
                     self.departures.append((self.clock.now + timedelta(minutes=service), patient.id))
         self.metrics.snapshot(self.clock.now, self.departments); return self.state()
     def switch_strategy(self, strategy: str) -> None:
         """Hot-swap allocation strategy in-place without resetting clock, queues, or resources."""
-        classes = {"urgency_only": UrgencyOnlyStrategy, "wait_aware": WaitAwareStrategy, "resource_aware": ResourceAwareStrategy, "mdp_optimal": MDPOptimalStrategy}
-        if strategy not in classes:
-            raise ValueError(f"Unknown strategy '{strategy}'. Valid: {list(classes.keys())}")
+        strat_obj = self._build_strategy(strategy)
         pr = self.config["priority"]
-        context = SimulationContext(self.config["urgency_weights"], pr["wait_weight"], pr["scarcity_weight"], pr["max_acceptable_wait_minutes"], {})
-        self.allocator.engine = PriorityEngine(classes[strategy](), context)
+        context = SimulationContext(self.config["urgency_weights"], pr["wait_weight"], pr["scarcity_weight"], pr["max_acceptable_wait_minutes"], {}, seed=self.seed)
+        self.allocator.engine = PriorityEngine(strat_obj, context)
         for event in self.allocator.tick(self.clock.now):
             if event.allocated:
                 patient = self._patient(event.patient_id)
@@ -71,7 +113,7 @@ class SimulationEngine:
                     patient.status = PatientStatus.IN_TREATMENT
                     patient.treatment_start = self.clock.now
                     patient.actual_wait_minutes = round((self.clock.now - patient.wait_start).total_seconds() / 60, 2)
-                    service = self.config["service_minutes"][patient.urgency.value]
+                    service = patient.service_duration_minutes if patient.service_duration_minutes > 0 else self.config["service_minutes"][patient.urgency.value]
                     self.departures.append((self.clock.now + timedelta(minutes=service), patient.id))
     def run(self, duration: int | None = None) -> dict:
         """Run headlessly through a finite horizon for reporting and comparison."""

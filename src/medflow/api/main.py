@@ -1,6 +1,10 @@
 """FastAPI entry point and lightweight route wiring with multi-tenant session isolation."""
 from __future__ import annotations
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -11,9 +15,11 @@ from ..simulation.engine import SimulationEngine
 from ..simulation.scenario_controller import ScenarioController
 from ..simulation.persistence import save_snapshot, load_snapshot
 from ..simulation.counterfactual import run_what_if_comparison
+from ..simulation.experiment_runner import run_experiment
 from ..utils.config_loader import load_config
 from .schemas import (
     ChatRequest,
+    ExperimentRequest,
     FailureRequest,
     RunRequest,
     ShortageRequest,
@@ -27,6 +33,7 @@ from .session_manager import SessionManager
 from .websocket_manager import ConnectionManager
 from ..math.monte_carlo import aggregate, run_replications
 from ..math.validation import benchmarks, run_validation_suite
+from .tts_router import router as tts_router, store_chat_reply
 
 app = FastAPI(title="MedFlow API", version="1.0.0")
 app.add_middleware(
@@ -37,6 +44,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(tts_router)
 
 config = load_config()
 sessions = SessionManager(lambda: load_config())
@@ -156,7 +164,9 @@ def chat(body: ChatRequest, request: Request = None):
     detected = detect_input_language(body.message)
     effective_lang = detected if (body.language == "en" and detected) else body.language
     reply = answer_clinical_query(current(request), body.message, effective_lang)
-    return {"reply": reply, "language": effective_lang}
+    session_id = _extract_session_id(request)
+    msg_id = store_chat_reply(reply, session_id=session_id)
+    return {"reply": reply, "language": effective_lang, "message_id": msg_id}
 
 
 @app.post("/scenario/fail-resource")
@@ -179,12 +189,34 @@ def switch(body: StrategyRequest, request: Request = None):
 def what_if(body: WhatIfRequest, request: Request = None):
     """Evaluate counterfactual operational scenario without modifying active simulation."""
     engine_inst = current(request)
+    sess_config = engine_inst.config if hasattr(engine_inst, "config") else config
     return run_what_if_comparison(
         current_engine=engine_inst,
-        config=config,
+        config=sess_config,
         horizon_minutes=body.horizon_minutes,
         resource_adjustments=body.resource_adjustments,
         strategy_override=body.strategy,
+        replications=body.replications,
+    )
+
+
+@app.post("/experiment/benchmark")
+def run_benchmark(body: ExperimentRequest, request: Request = None):
+    """Run multi-policy multi-seed benchmark experiment using Common Random Numbers (CRN)."""
+    sess_config = current(request).config if request else config
+    if body.seeds:
+        seeds = body.seeds
+    else:
+        rep_count = body.replications or 30
+        seeds = [1000 + i * 17 for i in range(rep_count)]
+
+    return run_experiment(
+        config=sess_config,
+        seeds=seeds,
+        horizon_minutes=body.horizon_minutes,
+        warmup_minutes=body.warmup_minutes,
+        policies=body.policies,
+        baseline_policy=body.baseline_policy,
     )
 
 

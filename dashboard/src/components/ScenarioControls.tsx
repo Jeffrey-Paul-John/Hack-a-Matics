@@ -22,7 +22,7 @@ type Props = {
   onStart: () => void
   onStep: () => void
   onRun: () => void
-  onCompare: () => void
+  onCompare?: () => void
   onStrategy: (strategy: Strategy) => void
   onOpenWhatIf?: () => void
   onRefresh?: () => void
@@ -201,15 +201,17 @@ export function ScenarioControls({
             </button>
           )}
 
-          <button
-            className="btn-dark"
-            onClick={onCompare}
-            disabled={isBusy}
-            title="Execute Monte Carlo comparison across 30 seeded replications"
-          >
-            <BarChart2 size={14} />
-            <span>Compare 30 Runs</span>
-          </button>
+          {onCompare && (
+            <button
+              className="btn-dark"
+              onClick={onCompare}
+              disabled={isBusy}
+              title="Navigate to Policy Testing for 30-replication comparison"
+            >
+              <BarChart2 size={14} />
+              <span>Go to Policy Testing</span>
+            </button>
+          )}
         </div>
       </div>
 

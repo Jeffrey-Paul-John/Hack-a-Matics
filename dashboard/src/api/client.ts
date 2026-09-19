@@ -1,6 +1,8 @@
 import type {
   Benchmarks,
   ComparisonResult,
+  ExperimentRequest,
+  ExperimentResponse,
   FailureRequest,
   RunRequest,
   ShortageRequest,
@@ -93,9 +95,12 @@ export const api = {
   },
   benchmarks: () => request<Benchmarks>('/math/benchmarks'),
   validation: () => request<Validation>('/math/validation'),
-  chat: async (message: string, language = 'en'): Promise<{ reply: string; language?: string }> => {
+  chat: async (
+    message: string,
+    language = 'en'
+  ): Promise<{ reply: string; language?: string; message_id?: string }> => {
     try {
-      return await request<{ reply: string; language?: string }>('/chat', {
+      return await request<{ reply: string; language?: string; message_id?: string }>('/chat', {
         method: 'POST',
         body: JSON.stringify({ message, language }),
       })
@@ -115,5 +120,43 @@ export const api = {
       `/users/me/onboarding/${tourId}/complete`,
       { method: 'POST' }
     ),
+  benchmarkExperiment: (body: ExperimentRequest) =>
+    request<ExperimentResponse>('/experiment/benchmark', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  ttsConfig: () =>
+    request<{
+      enabled: boolean
+      voices: Array<{ id: string; label: string; gender: string }>
+      default_voice: string
+      max_text_length: number
+    }>('/tts/config'),
+  ttsSpeak: async (
+    body: {
+      text?: string
+      message_id?: string
+      voice?: string
+      language_code?: string
+      pace?: number
+    },
+    signal?: AbortSignal
+  ): Promise<Blob> => {
+    const sessionId = getSessionId()
+    const response = await fetch(`${base}/tts/speak`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-ID': sessionId,
+      },
+      body: JSON.stringify(body),
+      signal,
+    })
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(errText || `TTS failed with status ${response.status}`)
+    }
+    return response.blob()
+  },
 }
 

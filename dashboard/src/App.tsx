@@ -29,6 +29,7 @@ import { ResourceGrid } from './components/ResourceGrid'
 import { ScenarioControls } from './components/ScenarioControls'
 import { StrategyComparison } from './components/StrategyComparison'
 import { ValidationPanel } from './components/ValidationPanel'
+import { PolicyBenchmarkingPanel } from './components/reports/PolicyBenchmarkingPanel'
 import { ChatWidget } from './components/ChatWidget'
 import { WhatIfModal } from './components/WhatIfModal'
 import { MobileBottomNav } from './components/MobileBottomNav'
@@ -186,7 +187,7 @@ export default function App() {
             MF
           </div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            Sentinel · Clinical Intelligence Desk
+            MedFlow · Clinical Intelligence Desk
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             {query.error
@@ -208,7 +209,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {/* Left Sentinel Sidebar */}
+      {/* Left Sidebar */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
@@ -227,7 +228,6 @@ export default function App() {
             const tourKey = activeTab in tourRegistry ? activeTab : 'new-user-dashboard'
             startTour(tourKey as keyof typeof tourRegistry)
           }}
-          onOpenWhatIf={() => setIsWhatIfOpen(true)}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto pb-24 md:pb-8">
@@ -264,7 +264,7 @@ export default function App() {
                   strategy={strategy}
                   comparison={comparison}
                   isComparing={isComparing}
-                  onCompare={() => void runMonteCarlo(true)}
+                  onCompare={() => navigate('/policy-testing')}
                   onRefresh={() => void query.refetch()}
                   onStep={() => void act(api.step, 'Advance Event')}
                   onRun={() => void act(() => api.run(60), 'Fast-Forward 60m')}
@@ -317,7 +317,7 @@ export default function App() {
                       onStart={() => void act(() => api.start({ seed: 42, strategy }), 'Start Shift')}
                       onStep={() => void act(api.step, 'Advance Event')}
                       onRun={() => void act(() => api.run(60), 'Fast-Forward 60m')}
-                      onCompare={() => void runMonteCarlo(true)}
+                      onCompare={() => navigate('/policy-testing')}
                       onStrategy={switchStrategy}
                       onOpenWhatIf={() => setIsWhatIfOpen(true)}
                       onRefresh={() => void query.refetch()}
@@ -427,6 +427,7 @@ export default function App() {
                     />
                   </div>
                   <ValidationPanel metrics={state.metrics} />
+                  <PolicyBenchmarkingPanel />
                   <StrategyComparison
                     result={comparison}
                     isLoading={isComparing}
@@ -575,7 +576,7 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Sentinel Clinical Copilot */}
+      {/* Floating MedFlow Clinical Copilot */}
       <ChatWidget />
 
       {/* "What If?" Counterfactual Simulation Sandbox Modal */}

@@ -59,13 +59,77 @@ export interface WhatIfDelta {
   patients_completed: number
 }
 
+export interface AppliedChange {
+  department: string
+  resource: string
+  baseline: number
+  counterfactual: number
+  delta: number
+  display: string
+  no_demand?: boolean
+}
+
+export interface BottleneckInfo {
+  department: string
+  resource: string
+  label: string
+  utilization: number
+  available: number
+  total: number
+  description: string
+}
+
+export interface ForkContext {
+  total_waiting: number
+  department_queues: Record<string, number>
+  resource_utilization: Record<string, number>
+  bottleneck: BottleneckInfo | null
+}
+
+export interface StatisticalSummary {
+  replications: number
+  mean_delta_wait: number
+  ci_wait_95: [number, number]
+  p_value_wait: number
+  wait_significant?: boolean
+  mean_delta_comp?: number
+  ci_comp_95?: [number, number]
+  p_value_comp?: number
+  comp_significant?: boolean
+  mean_delta_sla?: number
+  ci_sla_95?: [number, number]
+  p_value_sla?: number
+  sla_significant?: boolean
+  is_significant: boolean
+  zero_variance?: {
+    wait: boolean
+    comp: boolean
+    sla: boolean
+  }
+  holm_bonferroni?: {
+    adj_p_wait: number
+    adj_p_comp: number
+    adj_p_sla: number
+  }
+}
+
+export interface WhatIfMessage {
+  type: 'empty_queue' | 'not_bottleneck' | 'significant' | 'no_demand'
+  text: string
+}
+
 export interface WhatIfResponse {
   horizon_minutes: number
+  replications?: number
   adjustments: Record<string, Record<string, number>>
   strategy_override: string | null
   baseline: Metrics
   counterfactual: Metrics
   delta: WhatIfDelta
+  applied_changes?: AppliedChange[]
+  fork_context?: ForkContext
+  statistical_summary?: StatisticalSummary
+  message?: WhatIfMessage
 }
 
 export interface SimulationState {
@@ -106,8 +170,10 @@ export interface StrategyRequest {
 
 export interface WhatIfRequest {
   adjustments?: Record<string, Record<string, number>>
+  resource_adjustments?: Record<string, Record<string, number>>
   strategy_override?: Strategy | null
   horizon_minutes?: number
+  replications?: number
 }
 
 export interface ComparisonMetric {
@@ -142,3 +208,94 @@ export interface Validation {
   within_documented_tolerance: boolean | null
   little_law_sanity: boolean
 }
+
+export interface MetricDistribution {
+  mean: number
+  std: number
+  ci_lower: number
+  ci_upper: number
+}
+
+export interface AcuityDistribution {
+  mean: number | null
+  std: number | null
+  ci_lower: number | null
+  ci_upper: number | null
+}
+
+export interface ReplicationDetail {
+  seed: number
+  strategy: string
+  n_episodes: number
+  n_discharged: number
+  n_censored: number
+  mean_wait_minutes: number
+  p90_wait_minutes: number
+  throughput_per_hour: number
+  target_4hr_met_percent: number
+  icu_blocking_probability: number
+  wait_by_acuity: Record<string, number | null>
+}
+
+export interface PolicySummary {
+  mean_wait_minutes: MetricDistribution
+  p90_wait_minutes: MetricDistribution
+  throughput_per_hour: MetricDistribution
+  target_4hr_met_percent: MetricDistribution
+  icu_blocking_probability: MetricDistribution
+  censored_count_mean: number
+  episodes_per_rep_mean: number
+  wait_by_acuity: Record<string, AcuityDistribution>
+  replications: ReplicationDetail[]
+}
+
+export interface PairedComparison {
+  baseline_name: string
+  n_pairs: number
+  mean_diff: number
+  cohens_d: number
+  p_value_raw: number
+  p_value_holm: number
+  is_significant: boolean
+  bootstrap_ci: {
+    ci_lower: number
+    ci_upper: number
+    ci_level: number
+    method: string
+    n_boot: number
+  }
+}
+
+export interface AcuityTierComparison {
+  baseline_mean: number | null
+  policy_mean: number | null
+  diff_minutes: number
+  pct_change: number
+  status: 'improved' | 'worsened' | 'neutral' | 'insufficient_data'
+}
+
+export interface ExperimentRequest {
+  seeds?: number[]
+  replications?: number
+  horizon_minutes?: number
+  warmup_minutes?: number
+  policies?: string[]
+  baseline_policy?: string
+}
+
+export interface ExperimentResponse {
+  engine_version: string
+  config_hash: string
+  seeds: number[]
+  replications_count: number
+  is_low_sample_size: boolean
+  horizon_minutes: number
+  warmup_minutes: number
+  baseline_policy: string
+  policies: string[]
+  headline: string
+  acuity_breakdown: Record<string, AcuityTierComparison>
+  summaries: Record<string, PolicySummary>
+  paired_comparisons: Record<string, PairedComparison>
+}
+
