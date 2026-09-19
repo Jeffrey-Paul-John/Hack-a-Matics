@@ -45,6 +45,9 @@ export interface Episode {
 export interface Metrics {
   patients_completed: number
   average_wait_minutes: number
+  censoring_aware_wait_minutes?: number
+  p90_wait_minutes?: number
+  end_queue_length?: number
   average_treatment_minutes?: number
   wait_by_urgency: Record<string, { average: number; max: number }>
   sla_violations: number
@@ -54,6 +57,9 @@ export interface Metrics {
 
 export interface WhatIfDelta {
   wait_minutes: number
+  censoring_aware_wait_minutes?: number
+  p90_wait_minutes?: number
+  end_queue_length?: number
   wait_change_percent: number
   sla_violations: number
   patients_completed: number
@@ -91,18 +97,38 @@ export interface StatisticalSummary {
   mean_delta_wait: number
   ci_wait_95: [number, number]
   p_value_wait: number
+  p_value_wait_formatted?: string
   wait_significant?: boolean
+
+  mean_delta_censored_wait?: number
+  ci_censored_wait_95?: [number, number]
+  p_value_censored_wait?: number
+  p_value_censored_wait_formatted?: string
+  censored_wait_significant?: boolean
+
+  mean_delta_queue?: number
+  ci_queue_95?: [number, number]
+  p_value_queue?: number
+  p_value_queue_formatted?: string
+  queue_significant?: boolean
+
   mean_delta_comp?: number
   ci_comp_95?: [number, number]
   p_value_comp?: number
+  p_value_comp_formatted?: string
   comp_significant?: boolean
+
   mean_delta_sla?: number
   ci_sla_95?: [number, number]
   p_value_sla?: number
+  p_value_sla_formatted?: string
   sla_significant?: boolean
+
   is_significant: boolean
   zero_variance?: {
     wait: boolean
+    censored_wait?: boolean
+    queue?: boolean
     comp: boolean
     sla: boolean
   }
@@ -110,11 +136,13 @@ export interface StatisticalSummary {
     adj_p_wait: number
     adj_p_comp: number
     adj_p_sla: number
+    adj_p_censored_wait?: number
+    adj_p_queue?: number
   }
 }
 
 export interface WhatIfMessage {
-  type: 'empty_queue' | 'not_bottleneck' | 'significant' | 'no_demand'
+  type: 'empty_queue' | 'not_bottleneck' | 'significant' | 'improvement' | 'mixed' | 'worse' | 'no_demand'
   text: string
 }
 

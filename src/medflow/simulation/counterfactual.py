@@ -167,6 +167,43 @@ def compute_fork_context(engine: SimulationEngine) -> dict[str, Any]:
     }
 
 
+def format_p_value(p: float) -> str:
+    """Format p-value to avoid misleading 'p = 0.000' display."""
+    if p < 0.001:
+        return "p < 0.001"
+    return f"p = {p:.3f}"
+
+
+def extract_queue_and_wait_metrics(engine: SimulationEngine) -> tuple[float, float, int]:
+    """
+    Extracts censoring-aware metrics:
+    - censoring_aware_wait: Mean accrued wait time across all patients (completed, in treatment, and still waiting).
+    - p90_wait: 90th percentile wait time across all patients.
+    - end_queue_length: Total number of patients with status == WAITING at the horizon end.
+    """
+    all_patients = [p for d in engine.departments.values() for p in d.patient_queue]
+    waiting_count = sum(1 for p in all_patients if getattr(p, "status", None) == PatientStatus.WAITING)
+
+    waits: list[float] = []
+    for p in all_patients:
+        status = getattr(p, "status", None)
+        if status in (PatientStatus.DISCHARGED, PatientStatus.IN_TREATMENT):
+            waits.append(float(getattr(p, "actual_wait_minutes", 0.0)))
+        elif status == PatientStatus.WAITING:
+            wait_start = getattr(p, "wait_start", engine.clock.now)
+            accrued = max(0.0, (engine.clock.now - wait_start).total_seconds() / 60.0)
+            waits.append(float(accrued))
+
+    if not waits:
+        return 0.0, 0.0, waiting_count
+
+    avg_wait = round(sum(waits) / len(waits), 2)
+    sorted_waits = sorted(waits)
+    p90_idx = int(len(sorted_waits) * 0.9)
+    p90_wait = round(sorted_waits[min(p90_idx, len(sorted_waits) - 1)], 2)
+    return avg_wait, p90_wait, waiting_count
+
+
 def run_what_if_comparison(
     current_engine: SimulationEngine,
     config: dict,
@@ -178,7 +215,8 @@ def run_what_if_comparison(
     """
     Forks the active simulation state into Baseline and Counterfactual branches.
     Runs N seeded replications using Common Random Numbers (CRN) to evaluate
-    true policy/capacity impact with 95% Confidence Intervals and bottleneck explainability.
+    true policy/capacity impact with 95% Confidence Intervals, censoring-aware metrics,
+    and bottleneck explainability.
     """
     replications = max(1, min(50, replications or 20))
     fork_context = compute_fork_context(current_engine)
@@ -228,6 +266,12 @@ def run_what_if_comparison(
         rep_sla_b: list[int] = []
         rep_comp_a: list[int] = []
         rep_comp_b: list[int] = []
+        rep_censored_wait_a: list[float] = []
+        rep_censored_wait_b: list[float] = []
+        rep_p90_a: list[float] = []
+        rep_p90_b: list[float] = []
+        rep_queue_a: list[int] = []
+        rep_queue_b: list[int] = []
 
         base_seed = int(current_engine.seed if current_engine.seed is not None else 42)
 
@@ -285,18 +329,56 @@ def run_what_if_comparison(
             rep_comp_a.append(summ_a.get("patients_completed", 0))
             rep_comp_b.append(summ_b.get("patients_completed", 0))
 
+            cw_a, p90_a, q_a = extract_queue_and_wait_metrics(branch_a)
+            cw_b, p90_b, q_b = extract_queue_and_wait_metrics(branch_b)
+            rep_censored_wait_a.append(cw_a)
+            rep_censored_wait_b.append(cw_b)
+            rep_p90_a.append(p90_a)
+            rep_p90_b.append(p90_b)
+            rep_queue_a.append(q_a)
+            rep_queue_b.append(q_b)
+
         # 4. Statistical aggregation
+        # Completed wait (patients discharged)
         mean_wait_a = round(sum(rep_wait_a) / replications, 2)
         mean_wait_b = round(sum(rep_wait_b) / replications, 2)
         diff_waits = [b - a for a, b in zip(rep_wait_a, rep_wait_b)]
         mean_delta_wait = round(sum(diff_waits) / replications, 2)
-
         ci_wait_res = bootstrap_ci_paired(rep_wait_b, rep_wait_a, ci=0.95, n_boot=1000)
         ci_wait_95 = [ci_wait_res["ci_lower"], ci_wait_res["ci_upper"]]
         ttest_wait = paired_ttest(rep_wait_b, rep_wait_a)
         p_val_wait = ttest_wait["p_value"]
         wait_significant = bool((ci_wait_95[0] * ci_wait_95[1] > 0) and (ci_wait_95[0] != 0 or ci_wait_95[1] != 0))
 
+        # Censoring-aware wait (accrued wait across ALL patients: completed + waiting)
+        mean_censored_wait_a = round(sum(rep_censored_wait_a) / replications, 2)
+        mean_censored_wait_b = round(sum(rep_censored_wait_b) / replications, 2)
+        diff_cw = [b - a for a, b in zip(rep_censored_wait_a, rep_censored_wait_b)]
+        mean_delta_censored_wait = round(sum(diff_cw) / replications, 2)
+        ci_cw_res = bootstrap_ci_paired(rep_censored_wait_b, rep_censored_wait_a, ci=0.95, n_boot=1000)
+        ci_censored_wait_95 = [ci_cw_res["ci_lower"], ci_cw_res["ci_upper"]]
+        ttest_cw = paired_ttest(rep_censored_wait_b, rep_censored_wait_a)
+        p_val_censored_wait = ttest_cw["p_value"]
+        censored_wait_significant = bool((ci_censored_wait_95[0] * ci_censored_wait_95[1] > 0) and (ci_censored_wait_95[0] != 0 or ci_censored_wait_95[1] != 0))
+
+        # P90 wait
+        mean_p90_a = round(sum(rep_p90_a) / replications, 2)
+        mean_p90_b = round(sum(rep_p90_b) / replications, 2)
+        diff_p90 = [b - a for a, b in zip(rep_p90_a, rep_p90_b)]
+        mean_delta_p90 = round(sum(diff_p90) / replications, 2)
+
+        # End of horizon queue length
+        mean_queue_a = round(sum(rep_queue_a) / replications, 1)
+        mean_queue_b = round(sum(rep_queue_b) / replications, 1)
+        diff_queue = [b - a for a, b in zip(rep_queue_a, rep_queue_b)]
+        mean_delta_queue = round(sum(diff_queue) / replications, 1)
+        ci_queue_res = bootstrap_ci_paired([float(x) for x in rep_queue_b], [float(x) for x in rep_queue_a], ci=0.95, n_boot=1000)
+        ci_queue_95 = [ci_queue_res["ci_lower"], ci_queue_res["ci_upper"]]
+        ttest_queue = paired_ttest([float(x) for x in rep_queue_b], [float(x) for x in rep_queue_a])
+        p_val_queue = ttest_queue["p_value"]
+        queue_significant = bool((ci_queue_95[0] * ci_queue_95[1] > 0) and (ci_queue_95[0] != 0 or ci_queue_95[1] != 0))
+
+        # SLA violations
         mean_sla_a = round(sum(rep_sla_a) / replications, 1)
         mean_sla_b = round(sum(rep_sla_b) / replications, 1)
         diff_slas = [b - a for a, b in zip(rep_sla_a, rep_sla_b)]
@@ -307,6 +389,7 @@ def run_what_if_comparison(
         p_val_sla = ttest_sla["p_value"]
         sla_significant = bool((ci_sla_95[0] * ci_sla_95[1] > 0) and (ci_sla_95[0] != 0 or ci_sla_95[1] != 0))
 
+        # Discharges (completed patients)
         mean_comp_a = round(sum(rep_comp_a) / replications, 1)
         mean_comp_b = round(sum(rep_comp_b) / replications, 1)
         diff_comps = [b - a for a, b in zip(rep_comp_a, rep_comp_b)]
@@ -317,15 +400,45 @@ def run_what_if_comparison(
         p_val_comp = ttest_comp["p_value"]
         comp_significant = bool((ci_comp_95[0] * ci_comp_95[1] > 0) and (ci_comp_95[0] != 0 or ci_comp_95[1] != 0))
 
-        # Multiple testing correction with Holm-Bonferroni across wait, discharges, and SLA
-        adj_p_values = holm_bonferroni([p_val_wait, p_val_comp, p_val_sla])
-        adj_p_wait, adj_p_comp, adj_p_sla = adj_p_values
+        # Multiple testing correction with Holm-Bonferroni across wait, discharges, SLA, and queue metrics
+        adj_p_values = holm_bonferroni([p_val_wait, p_val_comp, p_val_sla, p_val_censored_wait, p_val_queue])
+        adj_p_wait, adj_p_comp, adj_p_sla, adj_p_cw, adj_p_queue = adj_p_values
 
         # An effect is significant if CI excludes zero for any primary or secondary metric
-        is_significant = bool(wait_significant or comp_significant or sla_significant)
+        is_significant = bool(wait_significant or comp_significant or sla_significant or censored_wait_significant or queue_significant)
         pct_wait_change = round(((mean_wait_b - mean_wait_a) / max(0.1, mean_wait_a)) * 100, 1)
 
-        # 5. Honest Result Messaging
+        # 5. Directional Classification & Honest Result Messaging
+        # Lower is better for: wait, censoring_aware_wait, sla_violations, end_queue_length
+        # Higher is better for: patients_completed
+        improved_findings: list[str] = []
+        worsened_findings: list[str] = []
+
+        if comp_significant and mean_delta_comp >= 0.1:
+            improved_findings.append(f"Discharges (+{abs(mean_delta_comp):.1f})")
+        elif comp_significant and mean_delta_comp <= -0.1:
+            worsened_findings.append(f"Discharges (-{abs(mean_delta_comp):.1f})")
+
+        if wait_significant and mean_delta_wait <= -0.1:
+            improved_findings.append(f"Completed avg wait (-{abs(mean_delta_wait):.1f}m)")
+        elif wait_significant and mean_delta_wait >= 0.1:
+            worsened_findings.append(f"Completed avg wait (+{mean_delta_wait:.1f}m)")
+
+        if sla_significant and mean_delta_sla <= -0.1:
+            improved_findings.append(f"SLA breaches (-{abs(mean_delta_sla):.1f})")
+        elif sla_significant and mean_delta_sla >= 0.1:
+            worsened_findings.append(f"SLA breaches (+{mean_delta_sla:.1f})")
+
+        if queue_significant and mean_delta_queue <= -0.1:
+            improved_findings.append(f"End queue length (-{abs(mean_delta_queue):.1f} waiting)")
+        elif queue_significant and mean_delta_queue >= 0.1:
+            worsened_findings.append(f"End queue length (+{mean_delta_queue:.1f} waiting)")
+
+        if censored_wait_significant and mean_delta_censored_wait <= -0.1:
+            improved_findings.append(f"Censoring-aware wait (-{abs(mean_delta_censored_wait):.1f}m)")
+        elif censored_wait_significant and mean_delta_censored_wait >= 0.1:
+            worsened_findings.append(f"Censoring-aware wait (+{mean_delta_censored_wait:.1f}m)")
+
         total_waiting = fork_context["total_waiting"]
         bottleneck_info = fork_context.get("bottleneck")
 
@@ -339,39 +452,33 @@ def run_what_if_comparison(
             msg_type = "no_demand"
             message_text = "No patients use this resource. Surgery has no patient demand in this simulation model, so adding capacity here will not affect wait times or throughput."
 
-        # 3. Check for statistically significant improvements across wait, discharges, or SLA
-        elif is_significant:
-            msg_type = "significant"
-            findings = []
+        # 3. Directional classification when effects are present
+        elif improved_findings and worsened_findings:
+            msg_type = "mixed"
+            message_text = (
+                f"Mixed operational effect: {', '.join(improved_findings)} improved, but {', '.join(worsened_findings)} worsened."
+            )
+            # Add clinical explanation if completed wait rose due to backlog clearing
+            if wait_significant and mean_delta_wait >= 0.1 and (comp_significant or queue_significant or censored_wait_significant):
+                message_text += " Note: Completed avg wait rose because added capacity allowed long-waiting queued patients to finally complete treatment (clearing right-censored backlog)."
+
+        elif improved_findings and not worsened_findings:
+            msg_type = "improvement"
+            detailed = []
             if wait_significant and abs(mean_delta_wait) >= 0.1:
-                direction = "reduction" if mean_delta_wait < 0 else "increase"
-                sign_str = "-" if mean_delta_wait < 0 else "+"
-                pct_wait = round((abs(mean_delta_wait) / max(0.1, mean_wait_a)) * 100, 1)
-                findings.append(
-                    f"{sign_str}{abs(mean_delta_wait):.1f} min wait time ({pct_wait}% {direction}) "
-                    f"[95% CI: {ci_wait_95[0]:.1f} to {ci_wait_95[1]:.1f} min, p = {p_val_wait:.3f}]."
-                )
-
+                detailed.append(f"-{abs(mean_delta_wait):.1f} min wait time [{format_p_value(p_val_wait)}]")
             if comp_significant and abs(mean_delta_comp) >= 0.1:
-                direction = "increase" if mean_delta_comp > 0 else "decrease"
-                sign_str = "+" if mean_delta_comp > 0 else "-"
-                pct_comp = round((abs(mean_delta_comp) / max(0.1, mean_comp_a)) * 100, 1)
-                findings.append(
-                    f"{sign_str}{abs(mean_delta_comp):.1f} discharges ({pct_comp}% {direction}, {mean_comp_a:.1f} -> {mean_comp_b:.1f}) "
-                    f"[95% CI: {ci_comp_95[0]:.1f} to {ci_comp_95[1]:.1f}, p = {p_val_comp:.3f}]."
-                )
-
+                detailed.append(f"+{abs(mean_delta_comp):.1f} discharges ({mean_comp_a:.1f} -> {mean_comp_b:.1f}) [{format_p_value(p_val_comp)}]")
+            if queue_significant and abs(mean_delta_queue) >= 0.1:
+                detailed.append(f"-{abs(mean_delta_queue):.1f} in end queue [{format_p_value(p_val_queue)}]")
             if sla_significant and abs(mean_delta_sla) >= 0.1:
-                direction = "fewer" if mean_delta_sla < 0 else "more"
-                sign_str = "-" if mean_delta_sla < 0 else "+"
-                findings.append(
-                    f"{sign_str}{abs(mean_delta_sla):.1f} SLA breaches ({direction}) [95% CI: {ci_sla_95[0]:.1f} to {ci_sla_95[1]:.1f}]."
-                )
+                detailed.append(f"-{abs(mean_delta_sla):.1f} SLA breaches [{format_p_value(p_val_sla)}]")
+            detail_str = f" ({'; '.join(detailed)})" if detailed else ""
+            message_text = f"Statistically significant improvement: {', '.join(improved_findings)} improved across replications{detail_str}."
 
-            if not findings:
-                message_text = f"Statistically significant operational shift across replications (p < 0.05)."
-            else:
-                message_text = " ".join(findings)
+        elif worsened_findings and not improved_findings:
+            msg_type = "worse"
+            message_text = f"Operational degradation: {', '.join(worsened_findings)} worsened across replications."
 
         # 4. Null result (no measurable change on wait, discharges, or SLA)
         else:
@@ -406,6 +513,8 @@ def run_what_if_comparison(
                     message_text += f" With only {total_waiting} waiting and a {horizon_minutes}-minute horizon, even the right fix may show a small effect. If the improvement is hard to see, use Emergency Surge to build a larger queue, or go to 120m or 240m."
 
         wait_zero_var = bool(ci_wait_95[0] == 0 and ci_wait_95[1] == 0 and mean_delta_wait == 0)
+        cw_zero_var = bool(ci_censored_wait_95[0] == 0 and ci_censored_wait_95[1] == 0 and mean_delta_censored_wait == 0)
+        queue_zero_var = bool(ci_queue_95[0] == 0 and ci_queue_95[1] == 0 and mean_delta_queue == 0)
         comp_zero_var = bool(ci_comp_95[0] == 0 and ci_comp_95[1] == 0 and mean_delta_comp == 0)
         sla_zero_var = bool(ci_sla_95[0] == 0 and ci_sla_95[1] == 0 and mean_delta_sla == 0)
 
@@ -418,18 +527,27 @@ def run_what_if_comparison(
             "fork_context": fork_context,
             "baseline": {
                 "average_wait_minutes": mean_wait_a,
+                "censoring_aware_wait_minutes": mean_censored_wait_a,
+                "p90_wait_minutes": mean_p90_a,
+                "end_queue_length": mean_queue_a,
                 "sla_violations": mean_sla_a,
                 "patients_completed": mean_comp_a,
                 "utilization": fork_context["resource_utilization"],
             },
             "counterfactual": {
                 "average_wait_minutes": mean_wait_b,
+                "censoring_aware_wait_minutes": mean_censored_wait_b,
+                "p90_wait_minutes": mean_p90_b,
+                "end_queue_length": mean_queue_b,
                 "sla_violations": mean_sla_b,
                 "patients_completed": mean_comp_b,
                 "utilization": fork_context["resource_utilization"],
             },
             "delta": {
                 "wait_minutes": mean_delta_wait,
+                "censoring_aware_wait_minutes": mean_delta_censored_wait,
+                "p90_wait_minutes": mean_delta_p90,
+                "end_queue_length": mean_delta_queue,
                 "wait_change_percent": pct_wait_change,
                 "sla_violations": mean_delta_sla,
                 "patients_completed": mean_delta_comp,
@@ -439,18 +557,38 @@ def run_what_if_comparison(
                 "mean_delta_wait": mean_delta_wait,
                 "ci_wait_95": ci_wait_95,
                 "p_value_wait": round(p_val_wait, 4),
+                "p_value_wait_formatted": format_p_value(p_val_wait),
                 "wait_significant": wait_significant,
+
+                "mean_delta_censored_wait": mean_delta_censored_wait,
+                "ci_censored_wait_95": ci_censored_wait_95,
+                "p_value_censored_wait": round(p_val_censored_wait, 4),
+                "p_value_censored_wait_formatted": format_p_value(p_val_censored_wait),
+                "censored_wait_significant": censored_wait_significant,
+
+                "mean_delta_queue": mean_delta_queue,
+                "ci_queue_95": ci_queue_95,
+                "p_value_queue": round(p_val_queue, 4),
+                "p_value_queue_formatted": format_p_value(p_val_queue),
+                "queue_significant": queue_significant,
+
                 "mean_delta_comp": mean_delta_comp,
                 "ci_comp_95": ci_comp_95,
                 "p_value_comp": round(p_val_comp, 4),
+                "p_value_comp_formatted": format_p_value(p_val_comp),
                 "comp_significant": comp_significant,
+
                 "mean_delta_sla": mean_delta_sla,
                 "ci_sla_95": ci_sla_95,
                 "p_value_sla": round(p_val_sla, 4),
+                "p_value_sla_formatted": format_p_value(p_val_sla),
                 "sla_significant": sla_significant,
+
                 "is_significant": is_significant,
                 "zero_variance": {
                     "wait": wait_zero_var,
+                    "censored_wait": cw_zero_var,
+                    "queue": queue_zero_var,
                     "comp": comp_zero_var,
                     "sla": sla_zero_var,
                 },
@@ -458,6 +596,8 @@ def run_what_if_comparison(
                     "adj_p_wait": adj_p_wait,
                     "adj_p_comp": adj_p_comp,
                     "adj_p_sla": adj_p_sla,
+                    "adj_p_censored_wait": adj_p_cw,
+                    "adj_p_queue": adj_p_queue,
                 },
             },
             "message": {

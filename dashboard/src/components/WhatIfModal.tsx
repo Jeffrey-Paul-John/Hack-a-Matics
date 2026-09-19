@@ -13,6 +13,9 @@ import {
   Minus,
   RefreshCw,
   Lightbulb,
+  Users,
+  Activity,
+  Timer,
 } from 'lucide-react'
 import { api } from '../api/client'
 import type { Strategy, WhatIfResponse } from '../api/types'
@@ -612,7 +615,11 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       ? 'bg-amber-50 border-amber-300 text-amber-950'
                       : result.message.type === 'not_bottleneck'
                       ? 'bg-amber-50 border-amber-300 text-amber-950'
-                      : result.statistical_summary?.is_significant
+                      : result.message.type === 'mixed'
+                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                      : result.message.type === 'worse'
+                      ? 'bg-rose-50 border-rose-300 text-rose-950'
+                      : result.message.type === 'improvement' || result.statistical_summary?.is_significant
                       ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
                       : 'bg-slate-50 border-slate-200 text-slate-800'
                   }`}
@@ -621,17 +628,19 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                     className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
                       result.message.type === 'empty_queue' || result.message.type === 'no_demand'
                         ? 'bg-amber-500 text-white'
-                        : result.message.type === 'not_bottleneck'
+                        : result.message.type === 'not_bottleneck' || result.message.type === 'mixed'
                         ? 'bg-amber-600 text-white'
-                        : result.statistical_summary?.is_significant
+                        : result.message.type === 'worse'
+                        ? 'bg-rose-600 text-white'
+                        : result.message.type === 'improvement' || result.statistical_summary?.is_significant
                         ? 'bg-emerald-500 text-white'
                         : 'bg-slate-700 text-white'
                     }`}
                   >
-                    {result.message.type === 'empty_queue' || result.message.type === 'no_demand' || result.message.type === 'not_bottleneck' ? (
-                      <AlertTriangle size={18} />
-                    ) : (
+                    {result.message.type === 'improvement' || (result.message.type !== 'mixed' && result.message.type !== 'worse' && result.message.type !== 'not_bottleneck' && result.message.type !== 'empty_queue' && result.message.type !== 'no_demand' && result.statistical_summary?.is_significant) ? (
                       <CheckCircle2 size={18} />
+                    ) : (
+                      <AlertTriangle size={18} />
                     )}
                   </div>
                   <div className="flex-1">
@@ -643,7 +652,11 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                           ? 'No Patient Demand for Resource'
                           : result.message.type === 'not_bottleneck'
                           ? 'No Measurable Relieving Effect'
-                          : result.statistical_summary?.is_significant
+                          : result.message.type === 'mixed'
+                          ? '⚡ Mixed Operational Effect'
+                          : result.message.type === 'worse'
+                          ? '⚠️ Operational Degradation'
+                          : result.message.type === 'improvement' || result.statistical_summary?.is_significant
                           ? '✨ Statistically Significant Improvement'
                           : 'Operational Result'}
                       </h4>
@@ -701,19 +714,24 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                         : 'Not Significant (95% CI includes 0)'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    {/* Wait Time Metric */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                    {/* Wait Time Metric (Completed) */}
                     {(() => {
                       const isZeroVar = Boolean(
                         result.statistical_summary.zero_variance?.wait ||
                         (result.statistical_summary.ci_wait_95[0] === 0 && result.statistical_summary.ci_wait_95[1] === 0 && result.delta.wait_minutes === 0)
                       )
+                      const isImproved = result.delta.wait_minutes < 0
                       return (
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Avg Wait Delta</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Completed Wait</span>
                             {result.statistical_summary.wait_significant && !isZeroVar && (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                p &lt; 0.05
+                              </span>
                             )}
                           </div>
                           <strong className="text-slate-900 font-mono text-sm block mt-0.5">
@@ -736,18 +754,64 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       )
                     })()}
 
+                    {/* Censoring-Aware Accrued Wait */}
+                    {(() => {
+                      const cwDelta = result.delta.censoring_aware_wait_minutes ?? 0
+                      const ciCw = result.statistical_summary.ci_censored_wait_95 ?? [0, 0]
+                      const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.censored_wait ||
+                        (ciCw[0] === 0 && ciCw[1] === 0 && cwDelta === 0)
+                      )
+                      const isImproved = cwDelta < 0
+                      return (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Accrued Wait</span>
+                            {result.statistical_summary.censored_wait_significant && !isZeroVar && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                p &lt; 0.05
+                              </span>
+                            )}
+                          </div>
+                          <strong className="text-slate-900 font-mono text-sm block mt-0.5">
+                            {cwDelta > 0 ? '+' : ''}
+                            {cwDelta.toFixed(2)} min
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${ciCw[0].toFixed(2)}, ${ciCw[1].toFixed(2)}]`}
+                          </span>
+                          {result.statistical_summary.holm_bonferroni?.adj_p_censored_wait !== undefined && (
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              adj p = {isZeroVar ? 'n/a (no variation)' : (
+                                result.statistical_summary.holm_bonferroni.adj_p_censored_wait < 0.001
+                                  ? '< 0.001'
+                                  : result.statistical_summary.holm_bonferroni.adj_p_censored_wait.toFixed(3)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
+
                     {/* Discharges Metric */}
                     {(() => {
                       const isZeroVar = Boolean(
                         result.statistical_summary.zero_variance?.comp ||
                         ((result.statistical_summary.ci_comp_95?.[0] ?? 0) === 0 && (result.statistical_summary.ci_comp_95?.[1] ?? 0) === 0 && (result.delta.patients_completed ?? 0) === 0)
                       )
+                      const isImproved = (result.delta.patients_completed ?? 0) > 0
                       return (
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Discharges Delta</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Discharges</span>
                             {result.statistical_summary.comp_significant && !isZeroVar && (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                p &lt; 0.05
+                              </span>
                             )}
                           </div>
                           <strong className="text-slate-900 font-mono text-sm block mt-0.5">
@@ -770,18 +834,64 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                       )
                     })()}
 
+                    {/* End Queue Length Metric */}
+                    {(() => {
+                      const qDelta = result.delta.end_queue_length ?? 0
+                      const ciQ = result.statistical_summary.ci_queue_95 ?? [0, 0]
+                      const isZeroVar = Boolean(
+                        result.statistical_summary.zero_variance?.queue ||
+                        (ciQ[0] === 0 && ciQ[1] === 0 && qDelta === 0)
+                      )
+                      const isImproved = qDelta < 0
+                      return (
+                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">End Queue</span>
+                            {result.statistical_summary.queue_significant && !isZeroVar && (
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                p &lt; 0.05
+                              </span>
+                            )}
+                          </div>
+                          <strong className="text-slate-900 font-mono text-sm block mt-0.5">
+                            {qDelta > 0 ? '+' : ''}
+                            {qDelta.toFixed(1)} waiting
+                          </strong>
+                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                            95% CI: {isZeroVar ? 'n/a (no variation)' : `[${ciQ[0].toFixed(1)}, ${ciQ[1].toFixed(1)}]`}
+                          </span>
+                          {result.statistical_summary.holm_bonferroni?.adj_p_queue !== undefined && (
+                            <span className="text-[9px] text-slate-400 font-mono block">
+                              adj p = {isZeroVar ? 'n/a (no variation)' : (
+                                result.statistical_summary.holm_bonferroni.adj_p_queue < 0.001
+                                  ? '< 0.001'
+                                  : result.statistical_summary.holm_bonferroni.adj_p_queue.toFixed(3)
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
+
                     {/* SLA Breaches Metric */}
                     {(() => {
                       const isZeroVar = Boolean(
                         result.statistical_summary.zero_variance?.sla ||
                         ((result.statistical_summary.ci_sla_95?.[0] ?? 0) === 0 && (result.statistical_summary.ci_sla_95?.[1] ?? 0) === 0 && (result.delta.sla_violations ?? 0) === 0)
                       )
+                      const isImproved = (result.delta.sla_violations ?? 0) < 0
                       return (
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-slate-500 font-semibold uppercase">SLA Breaches Delta</span>
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">SLA Breaches</span>
                             {result.statistical_summary.sla_significant && !isZeroVar && (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">p &lt; 0.05</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                isImproved ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                p &lt; 0.05
+                              </span>
                             )}
                           </div>
                           <strong className="text-slate-900 font-mono text-sm block mt-0.5">
@@ -807,14 +917,15 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                 </div>
               )}
 
-              {/* Side by Side Comparative Metrics Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Metric 1: Average Wait Time */}
+              {/* Side by Side Comparative Metrics Grid (6 Complete Clinical Metrics) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Metric 1: Completed Average Wait Time */}
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Avg Wait Time</span>
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Completed Avg Wait</span>
                     <Clock size={15} />
                   </div>
+                  <p className="text-[10px] text-slate-400 mb-2">Discharged patients only</p>
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
@@ -826,61 +937,115 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                     </div>
                     <div
                       className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
-                        result.delta.wait_minutes <= 0
+                        result.delta.wait_minutes < 0
                           ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-red-100 text-red-800'
+                          : result.delta.wait_minutes > 0
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {result.delta.wait_minutes <= 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
+                      {result.delta.wait_minutes < 0 ? (
+                        <TrendingDown size={12} />
+                      ) : result.delta.wait_minutes > 0 ? (
+                        <TrendingUp size={12} />
+                      ) : null}
                       <span>
-                        {result.delta.wait_minutes <= 0 ? '' : '+'}
+                        {result.delta.wait_minutes > 0 ? '+' : ''}
                         {result.delta.wait_minutes.toFixed(1)}m
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Metric 2: SLA Violations */}
+                {/* Metric 2: Censoring-Aware Accrued Wait */}
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">SLA Breaches</span>
-                    <ShieldCheck size={15} />
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Censoring-Aware Wait</span>
+                    <Activity size={15} />
                   </div>
+                  <p className="text-[10px] text-slate-400 mb-2">All patients (completed + queued)</p>
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
-                        {typeof result.counterfactual.sla_violations === 'number'
-                          ? result.counterfactual.sla_violations.toFixed(1)
-                          : result.counterfactual.sla_violations}
+                        {(result.counterfactual.censoring_aware_wait_minutes ?? result.counterfactual.average_wait_minutes).toFixed(1)}m
                       </div>
                       <div className="text-[10px] text-slate-400 line-through">
-                        Baseline: {typeof result.baseline.sla_violations === 'number'
-                          ? result.baseline.sla_violations.toFixed(1)
-                          : result.baseline.sla_violations}
+                        Baseline: {(result.baseline.censoring_aware_wait_minutes ?? result.baseline.average_wait_minutes).toFixed(1)}m
                       </div>
                     </div>
-                    <div
-                      className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
-                        result.delta.sla_violations <= 0
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {result.delta.sla_violations <= 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
-                      <span>
-                        {result.delta.sla_violations <= 0 ? '' : '+'}
-                        {result.delta.sla_violations.toFixed(1)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const dCw = result.delta.censoring_aware_wait_minutes ?? 0
+                      return (
+                        <div
+                          className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
+                            dCw < 0
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : dCw > 0
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {dCw < 0 ? <TrendingDown size={12} /> : dCw > 0 ? <TrendingUp size={12} /> : null}
+                          <span>
+                            {dCw > 0 ? '+' : ''}
+                            {dCw.toFixed(1)}m
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 
-                {/* Metric 3: Throughput / Discharges */}
+                {/* Metric 3: End-of-Horizon Queue Length */}
                 <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-                  <div className="flex items-center justify-between text-slate-500 mb-2">
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">End Queue Length</span>
+                    <Users size={15} />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-2">Patients waiting at horizon end</p>
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <div className="text-lg font-black text-slate-900">
+                        {typeof result.counterfactual.end_queue_length === 'number'
+                          ? result.counterfactual.end_queue_length.toFixed(1)
+                          : '0.0'}
+                      </div>
+                      <div className="text-[10px] text-slate-400 line-through">
+                        Baseline: {typeof result.baseline.end_queue_length === 'number'
+                          ? result.baseline.end_queue_length.toFixed(1)
+                          : '0.0'}
+                      </div>
+                    </div>
+                    {(() => {
+                      const dQ = result.delta.end_queue_length ?? 0
+                      return (
+                        <div
+                          className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
+                            dQ < 0
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : dQ > 0
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {dQ < 0 ? <TrendingDown size={12} /> : dQ > 0 ? <TrendingUp size={12} /> : null}
+                          <span>
+                            {dQ > 0 ? '+' : ''}
+                            {dQ.toFixed(1)}
+                          </span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                </div>
+
+                {/* Metric 4: Throughput / Discharges */}
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
                     <span className="text-[11px] font-bold uppercase tracking-wider font-mono">Discharges</span>
                     <ArrowRight size={15} />
                   </div>
+                  <p className="text-[10px] text-slate-400 mb-2">Completed patient throughput</p>
                   <div className="flex items-baseline justify-between">
                     <div>
                       <div className="text-lg font-black text-slate-900">
@@ -896,18 +1061,110 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
                     </div>
                     <div
                       className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
-                        result.delta.patients_completed >= 0
+                        result.delta.patients_completed > 0
                           ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
+                          : result.delta.patients_completed < 0
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-100 text-slate-700'
                       }`}
                     >
+                      {result.delta.patients_completed > 0 ? (
+                        <TrendingUp size={12} />
+                      ) : result.delta.patients_completed < 0 ? (
+                        <TrendingDown size={12} />
+                      ) : null}
                       <span>
-                        {result.delta.patients_completed >= 0 ? '+' : ''}
+                        {result.delta.patients_completed > 0 ? '+' : ''}
                         {typeof result.delta.patients_completed === 'number'
                           ? result.delta.patients_completed.toFixed(1)
                           : result.delta.patients_completed}
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Metric 5: SLA Breaches */}
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">SLA Breaches</span>
+                    <ShieldCheck size={15} />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-2">Wait target violations</p>
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <div className="text-lg font-black text-slate-900">
+                        {typeof result.counterfactual.sla_violations === 'number'
+                          ? result.counterfactual.sla_violations.toFixed(1)
+                          : result.counterfactual.sla_violations}
+                      </div>
+                      <div className="text-[10px] text-slate-400 line-through">
+                        Baseline: {typeof result.baseline.sla_violations === 'number'
+                          ? result.baseline.sla_violations.toFixed(1)
+                          : result.baseline.sla_violations}
+                      </div>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
+                        result.delta.sla_violations < 0
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : result.delta.sla_violations > 0
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {result.delta.sla_violations < 0 ? (
+                        <TrendingDown size={12} />
+                      ) : result.delta.sla_violations > 0 ? (
+                        <TrendingUp size={12} />
+                      ) : null}
+                      <span>
+                        {result.delta.sla_violations > 0 ? '+' : ''}
+                        {result.delta.sla_violations.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Metric 6: P90 Wait Time */}
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+                  <div className="flex items-center justify-between text-slate-500 mb-1">
+                    <span className="text-[11px] font-bold uppercase tracking-wider font-mono">P90 Wait Time</span>
+                    <Timer size={15} />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mb-2">90th percentile wait duration</p>
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <div className="text-lg font-black text-slate-900">
+                        {typeof result.counterfactual.p90_wait_minutes === 'number'
+                          ? result.counterfactual.p90_wait_minutes.toFixed(1)
+                          : '0.0'}m
+                      </div>
+                      <div className="text-[10px] text-slate-400 line-through">
+                        Baseline: {typeof result.baseline.p90_wait_minutes === 'number'
+                          ? result.baseline.p90_wait_minutes.toFixed(1)
+                          : '0.0'}m
+                      </div>
+                    </div>
+                    {(() => {
+                      const dP90 = result.delta.p90_wait_minutes ?? 0
+                      return (
+                        <div
+                          className={`flex items-center gap-1 font-bold text-xs px-2 py-0.5 rounded-full ${
+                            dP90 < 0
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : dP90 > 0
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {dP90 < 0 ? <TrendingDown size={12} /> : dP90 > 0 ? <TrendingUp size={12} /> : null}
+                          <span>
+                            {dP90 > 0 ? '+' : ''}
+                            {dP90.toFixed(1)}m
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>
