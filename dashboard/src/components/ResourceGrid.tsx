@@ -35,7 +35,7 @@ export function ResourceGrid({
       : departments.filter(d => d === selectedDept)
 
   return (
-    <section className="sentinel-card flex flex-col gap-5">
+    <section data-tour="resource-grid" className="sentinel-card flex flex-col gap-5">
       {/* Header & Capacity Overview Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>

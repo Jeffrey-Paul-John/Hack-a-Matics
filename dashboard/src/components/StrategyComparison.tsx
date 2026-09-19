@@ -116,7 +116,7 @@ export function StrategyComparison({
   })
 
   return (
-    <section className="sentinel-card flex flex-col gap-5">
+    <section data-tour="policy-comparison" className="sentinel-card flex flex-col gap-5">
       {/* Header with Re-run button */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div>

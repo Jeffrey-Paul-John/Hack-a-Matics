@@ -56,6 +56,42 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     'onboarding.clinicalCopilot.title': 'Sentinel Clinical AI Copilot',
     'onboarding.clinicalCopilot.description': 'Ask natural language queries in any language about live queue delays, doctor availability, and triage policies.',
 
+    // Hospital Map Onboarding
+    'onboarding.hospitalMap.queues.title': 'Live Triage Patient Queues',
+    'onboarding.hospitalMap.queues.description': 'Waiting patients sorted strictly by clinical acuity score (CRITICAL, HIGH, MODERATE, LOW) and arrival timestamps.',
+    'onboarding.hospitalMap.resources.title': 'Department Bed & Staff Utilization',
+    'onboarding.hospitalMap.resources.description': 'Monitors real-time occupied vs available capacity across ER, ICU, and General Ward beds, doctors, and nurses.',
+
+    // Simulation Lab Onboarding
+    'onboarding.simLab.controls.title': 'Discrete-Event Playback Controls',
+    'onboarding.simLab.controls.description': 'Start new shifts, advance clock by 60 minutes headlessly, or step through individual patient admission events.',
+    'onboarding.simLab.strategy.title': 'Dynamic Triage Policy Switcher',
+    'onboarding.simLab.strategy.description': 'Switch live allocation between Urgency-Only, Wait-Aware, Resource-Aware, and MDP-Optimal policies with zero reset.',
+    'onboarding.simLab.stress.title': 'Scenario Stress-Testing Injections',
+    'onboarding.simLab.stress.description': 'Inject sudden patient surges, staff shortages, or catastrophic asset offline events to test system resilience.',
+    'onboarding.simLab.resources.title': 'Unit Telemetry Reaction Feed',
+    'onboarding.simLab.resources.description': 'Inspect immediate telemetry reaction to active operational stress shocks across all clinical departments.',
+
+    // Policy Testing Onboarding
+    'onboarding.policyTesting.runner.title': 'Monte Carlo Evaluation Engine',
+    'onboarding.policyTesting.runner.description': 'Execute parallel stochastic simulation replications across pseudorandom seeds to benchmark performance.',
+    'onboarding.policyTesting.comparison.title': 'Multi-Policy Statistical Benchmarks',
+    'onboarding.policyTesting.comparison.description': 'Compare average wait times, bed utilization, and SLA violations with Student-t 95% Confidence Intervals.',
+    'onboarding.policyTesting.validation.title': 'Analytical Verification Suite',
+    'onboarding.policyTesting.validation.description': 'Validates simulation consistency against closed-form queuing theory: Erlang-C delays, Erlang-B blocking, and Little\'s Law.',
+
+    // Alerts Onboarding
+    'onboarding.alerts.banner.title': 'SLA Breach Surveillance',
+    'onboarding.alerts.banner.description': 'Flags patients whose waiting times exceed clinical thresholds, warning staff to intervene before critical starvation.',
+
+    // Reports Onboarding
+    'onboarding.reports.export.title': 'Shift Audit Telemetry Export',
+    'onboarding.reports.export.description': 'Download complete structured JSON reports containing operational throughput, resource logs, and queue metrics.',
+
+    // Settings Onboarding
+    'onboarding.settings.card.title': 'System Architecture & Connectivity',
+    'onboarding.settings.card.description': 'Displays active backend API endpoints, WebSocket connection status, and configuration file bindings.',
+
     // Navigation & Sidebar
     'nav.monitoring': 'Monitoring',
     'nav.overview': 'Overview',

@@ -23,7 +23,7 @@ export function ValidationPanel({ metrics }: { metrics: Metrics }) {
   const obsWait = `${metrics.average_wait_minutes.toFixed(1)} min`
 
   return (
-    <section className="sentinel-card flex flex-col gap-6">
+    <section data-tour="policy-validation" className="sentinel-card flex flex-col gap-6">
       {/* Header with status badge */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>

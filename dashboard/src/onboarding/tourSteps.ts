@@ -73,4 +73,127 @@ export const tourRegistry: Record<string, TourStepDef[]> = {
       side: 'left',
     },
   ],
+
+  'hospital-map': [
+    {
+      id: 'queue-panel',
+      target: '[data-tour="queue-panel"]',
+      titleKey: 'onboarding.hospitalMap.queues.title',
+      descriptionKey: 'onboarding.hospitalMap.queues.description',
+      side: 'right',
+    },
+    {
+      id: 'resource-grid',
+      target: '[data-tour="resource-grid"]',
+      titleKey: 'onboarding.hospitalMap.resources.title',
+      descriptionKey: 'onboarding.hospitalMap.resources.description',
+      side: 'left',
+    },
+    {
+      id: 'clinical-copilot',
+      target: '[data-tour="clinical-copilot"]',
+      titleKey: 'onboarding.clinicalCopilot.title',
+      descriptionKey: 'onboarding.clinicalCopilot.description',
+      side: 'left',
+    },
+  ],
+
+  'simulation-lab': [
+    {
+      id: 'sim-controls',
+      target: '[data-tour="sim-controls"]',
+      titleKey: 'onboarding.simLab.controls.title',
+      descriptionKey: 'onboarding.simLab.controls.description',
+      side: 'bottom',
+    },
+    {
+      id: 'strategy-switcher',
+      target: '[data-tour="strategy-switcher"]',
+      titleKey: 'onboarding.simLab.strategy.title',
+      descriptionKey: 'onboarding.simLab.strategy.description',
+      side: 'bottom',
+    },
+    {
+      id: 'stress-injection',
+      target: '[data-tour="stress-injection"]',
+      titleKey: 'onboarding.simLab.stress.title',
+      descriptionKey: 'onboarding.simLab.stress.description',
+      side: 'top',
+    },
+    {
+      id: 'resource-grid',
+      target: '[data-tour="resource-grid"]',
+      titleKey: 'onboarding.simLab.resources.title',
+      descriptionKey: 'onboarding.simLab.resources.description',
+      side: 'top',
+    },
+  ],
+
+  'policy-testing': [
+    {
+      id: 'policy-runner',
+      target: '[data-tour="policy-runner"]',
+      titleKey: 'onboarding.policyTesting.runner.title',
+      descriptionKey: 'onboarding.policyTesting.runner.description',
+      side: 'bottom',
+    },
+    {
+      id: 'policy-comparison',
+      target: '[data-tour="policy-comparison"]',
+      titleKey: 'onboarding.policyTesting.comparison.title',
+      descriptionKey: 'onboarding.policyTesting.comparison.description',
+      side: 'bottom',
+    },
+    {
+      id: 'policy-validation',
+      target: '[data-tour="policy-validation"]',
+      titleKey: 'onboarding.policyTesting.validation.title',
+      descriptionKey: 'onboarding.policyTesting.validation.description',
+      side: 'top',
+    },
+  ],
+
+  'alerts': [
+    {
+      id: 'alerts-banner',
+      target: '[data-tour="alerts-banner"]',
+      titleKey: 'onboarding.alerts.banner.title',
+      descriptionKey: 'onboarding.alerts.banner.description',
+      side: 'bottom',
+    },
+    {
+      id: 'queue-panel',
+      target: '[data-tour="queue-panel"]',
+      titleKey: 'onboarding.hospitalMap.queues.title',
+      descriptionKey: 'onboarding.hospitalMap.queues.description',
+      side: 'top',
+    },
+  ],
+
+  'reports': [
+    {
+      id: 'reports-export',
+      target: '[data-tour="reports-export"]',
+      titleKey: 'onboarding.reports.export.title',
+      descriptionKey: 'onboarding.reports.export.description',
+      side: 'bottom',
+    },
+    {
+      id: 'policy-validation',
+      target: '[data-tour="policy-validation"]',
+      titleKey: 'onboarding.policyTesting.validation.title',
+      descriptionKey: 'onboarding.policyTesting.validation.description',
+      side: 'top',
+    },
+  ],
+
+  'settings': [
+    {
+      id: 'settings-card',
+      target: '[data-tour="settings-card"]',
+      titleKey: 'onboarding.settings.card.title',
+      descriptionKey: 'onboarding.settings.card.description',
+      side: 'bottom',
+    },
+  ],
 }

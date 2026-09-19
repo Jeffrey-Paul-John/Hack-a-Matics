@@ -52,15 +52,16 @@ export const api = {
   },
   benchmarks: () => request<Benchmarks>('/math/benchmarks'),
   validation: () => request<Validation>('/math/validation'),
-  chat: async (message: string, language = 'en'): Promise<{ reply: string }> => {
+  chat: async (message: string, language = 'en'): Promise<{ reply: string; language?: string }> => {
     try {
-      return await request<{ reply: string }>('/chat', {
+      return await request<{ reply: string; language?: string }>('/chat', {
         method: 'POST',
         body: JSON.stringify({ message, language }),
       })
     } catch {
       return {
-        reply: `[MedFlow Assistant (${language.toUpperCase()})]: Hospital operations are currently running. Clinical triage priority is actively monitored by the optimization engine.`
+        reply: `[MedFlow Assistant (${language.toUpperCase()})]: Hospital operations are currently running. Clinical triage priority is actively monitored by the optimization engine.`,
+        language,
       }
     }
   },

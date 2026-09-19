@@ -32,7 +32,7 @@ export function QueuePanel({ queues }: { queues: Record<string, QueuePatient[]> 
   const acuities = Array.from(new Set(allRows.map(r => r.urgency)))
 
   return (
-    <section className="sentinel-card flex flex-col gap-4">
+    <section data-tour="queue-panel" className="sentinel-card flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div>

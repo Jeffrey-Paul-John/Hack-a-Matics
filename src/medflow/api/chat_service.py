@@ -162,6 +162,26 @@ def _call_groq_llm(system_prompt: str, user_message: str, model: str = "llama-3.
     return None
 
 
+import re
+
+def detect_input_language(text: str) -> str | None:
+    """Detect Indian language script or keywords from user message."""
+    lower = text.lower()
+    if re.search(r"[\u0C00-\u0C7F]", text) or "telugu" in lower:
+        return "te"
+    if re.search(r"[\u0C80-\u0CFF]", text) or "kannada" in lower:
+        return "kn"
+    if re.search(r"[\u0B80-\u0BFF]", text) or "tamil" in lower:
+        return "ta"
+    if re.search(r"[\u0980-\u09FF]", text) or "bengali" in lower:
+        return "bn"
+    if re.search(r"[\u0900-\u097F]", text) or "hindi" in lower:
+        return "hi"
+    if "marathi" in lower:
+        return "mr"
+    return None
+
+
 def answer_clinical_query(engine: SimulationEngine, message: str, language: str = "en") -> str:
     """Analyze query and compute response dynamically using live simulation state, Groq LLM, and Sarvam."""
     state = engine.state()
@@ -169,6 +189,13 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
     resources = state["resources"]
     queues = state["queues"]
     sim_time = state["now"][11:16] if len(state["now"]) >= 16 else state["now"]
+
+    # Auto-detect language if default "en" passed but message is in an Indian script or specifies a language
+    effective_language = language
+    if effective_language == "en":
+        detected = detect_input_language(message)
+        if detected:
+            effective_language = detected
 
     active_strategy = getattr(engine.allocator.engine.strategy, "__class__", type("Strategy", (), {"__name__": "ResourceAware"})).__name__
     total_waiting = sum(len(q) for q in queues.values())
@@ -252,12 +279,12 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
                 f"Average wait {avg_wait:.1f} min across {completed} completed patients. SLA breaches: {sla_breaches}."
             )
 
-    # 2. Multilingual support: Translate via Sarvam AI if an Indian language is requested
-    if language != "en" and language in SARVAM_LANG_MAP:
-        sarvam_res = translate_with_sarvam(llm_response, language)
+    # 2. Multilingual support: Translate via Sarvam AI if an Indian language is requested or detected
+    if effective_language != "en" and effective_language in SARVAM_LANG_MAP:
+        sarvam_res = translate_with_sarvam(llm_response, effective_language)
         if sarvam_res:
             return sarvam_res
-        prefix = FALLBACK_PREFIXES.get(language, f"[{language}]")
+        prefix = FALLBACK_PREFIXES.get(effective_language, f"[{effective_language}]")
         return f"{prefix} {sim_time}: {llm_response}"
 
     return llm_response

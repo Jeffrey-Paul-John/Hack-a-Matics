@@ -99,7 +99,7 @@ export function ScenarioControls({
     <section className="flex flex-col gap-5">
       {/* Top Bar: Stepping Controls & Strategy Policy */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div data-tour="sim-controls" className="flex flex-wrap items-center gap-2.5">
           <button
             className="btn-primary"
             onClick={onStart}
@@ -132,7 +132,7 @@ export function ScenarioControls({
         </div>
 
         {/* Active Policy Selector & Monte Carlo Evaluation */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-tour="strategy-switcher" className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <span className="text-xs text-slate-500 font-semibold">Triage Policy:</span>
             <select
@@ -178,7 +178,7 @@ export function ScenarioControls({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div data-tour="stress-injection" className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Shock 1: Demand Surge Card */}
           <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-4 flex flex-col justify-between hover:border-slate-300 transition-colors">
             <div>

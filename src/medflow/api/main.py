@@ -7,7 +7,7 @@ from ..simulation.engine import SimulationEngine
 from ..simulation.scenario_controller import ScenarioController
 from ..utils.config_loader import load_config
 from .schemas import ChatRequest, FailureRequest, RunRequest, ShortageRequest, StartRequest, StrategyRequest, SurgeRequest
-from .chat_service import answer_clinical_query
+from .chat_service import answer_clinical_query, detect_input_language
 from .websocket_manager import ConnectionManager
 from ..math.monte_carlo import aggregate, run_replications
 from ..math.validation import benchmarks, run_validation_suite
@@ -63,7 +63,10 @@ def meta_config():
 @app.post("/chat")
 def chat(body: ChatRequest):
     """Clinical copilot answering queries using live simulation telemetry only."""
-    return {"reply": answer_clinical_query(current(), body.message, body.language)}
+    detected = detect_input_language(body.message)
+    effective_lang = detected if (body.language == "en" and detected) else body.language
+    reply = answer_clinical_query(current(), body.message, effective_lang)
+    return {"reply": reply, "language": effective_lang}
 @app.post("/scenario/fail-resource")
 def failure(body: FailureRequest):
     success = ScenarioController(current()).fail_resource(body.resource_id)

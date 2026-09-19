@@ -17,6 +17,15 @@ const QUICK_PROMPTS = [
   'Which strategy is currently active?',
 ]
 
+export function detectLanguage(text: string): SupportedLanguage | null {
+  const lower = text.toLowerCase()
+  if (/[\u0C00-\u0C7F]/.test(text) || lower.includes('telugu')) return 'te'
+  if (/[\u0C80-\u0CFF]/.test(text) || lower.includes('kannada')) return 'kn'
+  if (/[\u0B80-\u0BFF]/.test(text) || lower.includes('tamil')) return 'ta'
+  if (/[\u0900-\u097F]/.test(text) || lower.includes('hindi')) return 'hi'
+  return null
+}
+
 export function ChatWidget() {
   const { language, setLanguage } = useLanguageStore()
   const { t } = useTranslation()
@@ -36,6 +45,13 @@ export function ChatWidget() {
     const textToSend = (customText || input).trim()
     if (!textToSend || loading) return
 
+    // Auto-detect language if user typed in regional language or mentions language
+    const detected = detectLanguage(textToSend)
+    const activeLang = detected || language
+    if (detected && detected !== language) {
+      setLanguage(detected)
+    }
+
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
       sender: 'user',
@@ -48,7 +64,10 @@ export function ChatWidget() {
     setLoading(true)
 
     try {
-      const res = await api.chat(textToSend, language)
+      const res = await api.chat(textToSend, activeLang)
+      if (res.language && ['en', 'hi', 'kn', 'te', 'ta'].includes(res.language) && res.language !== language) {
+        setLanguage(res.language as SupportedLanguage)
+      }
       const botMsg: ChatMessage = {
         id: `bot-${Date.now()}`,
         sender: 'assistant',
@@ -190,7 +209,14 @@ export function ChatWidget() {
             <input
               type="text"
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => {
+                const val = e.target.value
+                setInput(val)
+                const detected = detectLanguage(val)
+                if (detected && detected !== language) {
+                  setLanguage(detected)
+                }
+              }}
               placeholder={t('chat.placeholder')}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-400"
               disabled={loading}

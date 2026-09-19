@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   ShieldAlert,
   ShieldPlus,
+  Sparkles,
   WifiOff,
 } from 'lucide-react'
 import { api } from './api/client'
@@ -29,6 +30,7 @@ import { StrategyComparison } from './components/StrategyComparison'
 import { ValidationPanel } from './components/ValidationPanel'
 import { ChatWidget } from './components/ChatWidget'
 import { useTour } from './onboarding/useTour'
+import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
 import { PageTransition } from './PageTransition'
 
@@ -184,7 +186,10 @@ export default function App() {
           isConnected={isConnected}
           alertCount={alertCount}
           onSearch={setSearchTerm}
-          onGuideMe={() => startTour('new-user-dashboard')}
+          onGuideMe={() => {
+            const tourKey = activeTab in tourRegistry ? activeTab : 'new-user-dashboard'
+            startTour(tourKey as keyof typeof tourRegistry)
+          }}
         />
 
         <main className="flex-1 p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
@@ -283,7 +288,7 @@ export default function App() {
               path="/policy-testing"
               element={
                 <div className="flex flex-col gap-6">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div data-tour="policy-runner" className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                         {t('pages.policy.title')}
@@ -335,7 +340,7 @@ export default function App() {
                     </p>
                   </div>
                   <div className="sentinel-card">
-                    <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 mb-6">
+                    <div data-tour="alerts-banner" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 mb-6">
                       <ShieldAlert size={20} className="text-red-600 shrink-0" />
                       <div>
                         <strong className="text-xs">
@@ -357,7 +362,7 @@ export default function App() {
               path="/reports"
               element={
                 <div className="flex flex-col gap-6">
-                  <div className="flex items-center justify-between">
+                  <div data-tour="reports-export" className="flex items-center justify-between">
                     <div>
                       <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                         {t('pages.reports.title')}
@@ -432,6 +437,45 @@ export default function App() {
                       </ul>
                     </div>
                   </div>
+
+                  {/* Interactive Page Tours Directory */}
+                  <div className="sentinel-card">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles size={16} className="text-emerald-500" />
+                      <h2 className="text-sm font-bold text-slate-900">
+                        Interactive Guided Tours by Page
+                      </h2>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-4">
+                      Launch an interactive spotlight walkthrough for any section of MedFlow:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {[
+                        { key: 'new-user-dashboard', path: '/', title: 'Executive Overview', desc: 'KPIs, trend curve, capacity cards' },
+                        { key: 'hospital-map', path: '/hospital-map', title: 'Hospital Map', desc: 'Triage queues & unit asset grid' },
+                        { key: 'simulation-lab', path: '/simulation-lab', title: 'Simulation Lab', desc: 'Stepping controls & shock injections' },
+                        { key: 'policy-testing', path: '/policy-testing', title: 'Policy Testing', desc: 'Monte Carlo evaluation & benchmarks' },
+                        { key: 'alerts', path: '/alerts', title: 'Alerts & SLA', desc: 'Breach surveillance & backlog review' },
+                        { key: 'reports', path: '/reports', title: 'Audit Reports', desc: 'Telemetry export & queuing validation' },
+                        { key: 'settings', path: '/settings', title: 'System Settings', desc: 'API connectivity & config parameters' },
+                      ].map(item => (
+                        <button
+                          key={item.key}
+                          onClick={() => {
+                            navigate(item.path)
+                            setTimeout(() => startTour(item.key as any), 350)
+                          }}
+                          className="flex flex-col items-start p-3 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300 transition-all text-left group cursor-pointer"
+                        >
+                          <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-600 flex items-center justify-between w-full">
+                            <span>{item.title}</span>
+                            <span className="text-[10px] font-mono text-emerald-600">Start &rarr;</span>
+                          </span>
+                          <span className="text-[11px] text-slate-500 mt-1">{item.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               }
             />
@@ -449,7 +493,7 @@ export default function App() {
                       {t('pages.settings.desc')}
                     </p>
                   </div>
-                  <div className="sentinel-card">
+                  <div data-tour="settings-card" className="sentinel-card">
                     <h2 className="text-sm font-bold text-slate-900 mb-3">
                       {t('pages.settings.connectionConfig')}
                     </h2>
