@@ -15,6 +15,7 @@ import {
   Sparkles,
   WifiOff,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { api } from './api/client'
 import type { ComparisonResult, Strategy } from './api/types'
 import { useLiveSocket } from './hooks/useLiveSocket'
@@ -31,6 +32,8 @@ import { ValidationPanel } from './components/ValidationPanel'
 import { ChatWidget } from './components/ChatWidget'
 import { WhatIfModal } from './components/WhatIfModal'
 import { MobileBottomNav } from './components/MobileBottomNav'
+import { DownloadTelemetryDropdown } from './components/DownloadTelemetryDropdown'
+import { generateAuditZip } from './utils/auditExport'
 import { useTour } from './onboarding/useTour'
 import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
@@ -134,6 +137,12 @@ export default function App() {
     void act(() => api.switchStrategy(next), `Switch to ${next.replace('_', ' ')}`)
   }
 
+  const benchmarksQuery = useQuery({
+    queryKey: ['benchmarks'],
+    queryFn: api.benchmarks,
+    staleTime: 60000,
+  })
+
   const handleExportReport = () => {
     if (!state) return
     const reportData = {
@@ -142,6 +151,7 @@ export default function App() {
       metrics: state.metrics,
       queues: state.queues,
       resources: state.resources,
+      episodes: state.episodes || state.metrics.completed_episodes || [],
       strategy,
     }
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' })
@@ -149,6 +159,21 @@ export default function App() {
     const a = document.createElement('a')
     a.href = url
     a.download = `medflow-report-${state.now.replace(/[:.]/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportCsv = async () => {
+    if (!state) return
+    const { blob, filename } = await generateAuditZip({
+      state,
+      benchmarks: benchmarksQuery.data,
+      sessionId: api.getSessionId(),
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -244,6 +269,7 @@ export default function App() {
                   onStep={() => void act(api.step, 'Advance Event')}
                   onRun={() => void act(() => api.run(60), 'Fast-Forward 60m')}
                   onExportReport={handleExportReport}
+                  onExportCsv={handleExportCsv}
                   onSelectWard={() => handleSelectTab('hospital-map')}
                 />
               }
@@ -390,13 +416,15 @@ export default function App() {
                         {t('pages.reports.desc')}
                       </p>
                     </div>
-                    <button
-                      onClick={handleExportReport}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
-                    >
-                      <Download size={14} />
-                      <span>{t('pages.reports.downloadJson')}</span>
-                    </button>
+                    <DownloadTelemetryDropdown
+                      onExportJson={handleExportReport}
+                      onExportCsv={handleExportCsv}
+                      hasEpisodes={
+                        ((state.episodes || state.metrics.completed_episodes)?.length ??
+                          state.metrics.patients_completed ??
+                          0) > 0
+                      }
+                    />
                   </div>
                   <ValidationPanel metrics={state.metrics} />
                   <StrategyComparison

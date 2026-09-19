@@ -28,6 +28,7 @@ import {
 } from 'recharts'
 import type { ComparisonResult, SimulationState, Strategy } from '../api/types'
 import { useTranslation } from '../onboarding/i18n'
+import { DownloadTelemetryDropdown } from './DownloadTelemetryDropdown'
 
 interface ExecutiveOverviewProps {
   state: SimulationState
@@ -39,6 +40,7 @@ interface ExecutiveOverviewProps {
   onStep: () => void
   onRun: () => void
   onExportReport: () => void
+  onExportCsv?: () => Promise<void> | void
   onSelectWard?: (wardName: string) => void
 }
 
@@ -55,6 +57,7 @@ export function ExecutiveOverview({
   onStep,
   onRun,
   onExportReport,
+  onExportCsv,
   onSelectWard,
 }: ExecutiveOverviewProps) {
   const [activeDepartment, setActiveDepartment] = useState<string | null>(null)
@@ -187,14 +190,16 @@ export function ExecutiveOverview({
             <span>{t('overview.run60m')}</span>
           </button>
 
-          <button
-            onClick={onExportReport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition-all"
-            title={t('overview.exportReport')}
-          >
-            <Download size={14} />
-            <span>{t('overview.exportReport')}</span>
-          </button>
+          <DownloadTelemetryDropdown
+            onExportJson={onExportReport}
+            onExportCsv={onExportCsv || onExportReport}
+            hasEpisodes={
+              ((state.episodes || state.metrics.completed_episodes)?.length ??
+                state.metrics.patients_completed ??
+                0) > 0
+            }
+            label={t('overview.exportReport')}
+          />
         </div>
       </div>
 

@@ -7,12 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "cap:build": "npm run build && npx cap sync",
     "cap:sync": "npx cap sync"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
     "driver.js": "^1.8.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^0.468.0",
     "motion": "^13.4.0",
     "react": "^18.3.1",
@@ -31,6 +33,7 @@
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
-    "vite": "^6.1.0"
+    "vite": "^6.1.0",
+    "vitest": "^5.0.1"
   }
 }

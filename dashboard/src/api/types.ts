@@ -23,6 +23,25 @@ export interface ResourcePool {
   items?: ResourceItem[]
 }
 
+export interface Episode {
+  episode_id: string
+  patient_id?: string
+  arrival_time: string
+  admit_time: string
+  discharge_time: string
+  wait_min: number
+  treatment_min: number
+  los_min: number
+  wait_minutes?: number
+  treatment_minutes?: number
+  total_minutes?: number
+  acuity_initial: string
+  acuity_final: string
+  urgency?: string
+  unit: string
+  outcome: string
+}
+
 export interface Metrics {
   patients_completed: number
   average_wait_minutes: number
@@ -30,6 +49,7 @@ export interface Metrics {
   wait_by_urgency: Record<string, { average: number; max: number }>
   sla_violations: number
   utilization: Record<string, number>
+  completed_episodes?: Episode[]
 }
 
 export interface WhatIfDelta {
@@ -54,6 +74,7 @@ export interface SimulationState {
   queues: Record<string, QueuePatient[]>
   resources: Record<string, Record<string, ResourcePool>>
   metrics: Metrics
+  episodes?: Episode[]
 }
 
 // Schemas mirroring FastAPI schemas.py field-for-field

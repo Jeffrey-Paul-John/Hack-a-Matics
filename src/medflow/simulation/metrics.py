@@ -16,18 +16,34 @@ class MetricsCollector:
                 utilization[f"{name_str}:{kind_str}"] = round(100 * sum(r.status == ResourceStatus.OCCUPIED for r in pool) / len(pool), 2) if pool else 0
         self.snapshots.append({"time": at.isoformat(), "queues": {(name.value if hasattr(name, "value") else str(name)): sum(p.status == PatientStatus.WAITING for p in d.patient_queue) for name,d in departments.items()}, "utilization": utilization})
     def discharge(self, patient, at: datetime, sla_minutes: dict | None = None) -> None:
-        """Record queue wait and treatment duration outcome separately at discharge."""
+        """Record queue wait, treatment duration, and full episode outcome at discharge."""
         wait = patient.actual_wait_minutes
         service = patient.treatment_duration_minutes
+        admit = patient.treatment_start.isoformat() if patient.treatment_start else patient.arrival_time.isoformat()
+        unit_val = patient.department_needed.value if hasattr(patient.department_needed, "value") else str(patient.department_needed)
+        urg_val = patient.urgency.value if hasattr(patient.urgency, "value") else str(patient.urgency)
+        
         self.completed.append({
+            "episode_id": patient.id,
             "patient_id": patient.id,
-            "urgency": patient.urgency.value,
+            "arrival_time": patient.arrival_time.isoformat(),
+            "admit_time": admit,
+            "discharge_time": at.isoformat(),
+            "wait_min": round(wait, 1),
+            "treatment_min": round(service, 1),
+            "los_min": round(wait + service, 1),
             "wait_minutes": wait,
             "treatment_minutes": service,
             "total_minutes": round(wait + service, 2),
+            "acuity_initial": urg_val,
+            "acuity_final": urg_val,
+            "urgency": urg_val,
+            "unit": unit_val,
+            "outcome": "DISCHARGED",
         })
-        if sla_minutes and wait > sla_minutes[patient.urgency.value]:
+        if sla_minutes and wait > sla_minutes[urg_val]:
             self.sla_violations += 1
+
     def summary(self) -> dict:
         """Create bounded, dashboard-ready aggregates from immutable observations."""
         waits = defaultdict(list)
@@ -42,4 +58,6 @@ class MetricsCollector:
             "wait_by_urgency": {u: {"average": round(sum(v)/len(v), 2), "max": max(v)} for u,v in waits.items()},
             "sla_violations": self.sla_violations,
             "utilization": self.snapshots[-1]["utilization"] if self.snapshots else {},
+            "completed_episodes": self.completed,
         }
+

@@ -112,5 +112,7 @@ class SimulationEngine:
                 for name, d in self.departments.items()
             },
             "metrics": self.metrics.summary(),
+            "episodes": self.metrics.completed,
         }
+
 
