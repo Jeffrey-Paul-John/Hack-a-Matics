@@ -1,0 +1,29 @@
+:root {
+  --plane: #f8fafc;
+  --accent: #cbd5e1;
+}
+
+.pageCurtain {
+  position: fixed;
+  top: -10vh;
+  left: -20vw;
+  width: 140vw;
+  height: 120vh;   /* oversized so the skew never exposes a wedge of the page */
+  z-index: 300;
+  background: var(--plane);
+  pointer-events: none;  /* never lock the app behind an invisible overlay */
+  will-change: transform;
+}
+
+.pageCurtain::before,
+.pageCurtain::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);   /* hairlines make the wipe legible */
+}
+
+.pageCurtain::before { left: 0; }
+.pageCurtain::after { right: 0; }

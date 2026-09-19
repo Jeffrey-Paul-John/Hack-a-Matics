@@ -1,0 +1,319 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  body {
+    @apply m-0 bg-[#f8fafc] text-[#0f172a] font-display antialiased selection:bg-slate-900 selection:text-white;
+  }
+  button, select, input {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 font-display;
+  }
+}
+
+@layer components {
+  /* Sentinel Style Cards & Containers */
+  .sentinel-card {
+    @apply bg-white border border-[#e2e8f0] rounded-xl p-5 shadow-sentinel transition-shadow hover:shadow-md;
+  }
+
+  .metric-card {
+    @apply bg-white border border-[#e2e8f0] rounded-xl p-5 shadow-sentinel flex flex-col justify-between transition-all hover:border-slate-300 hover:shadow-md;
+  }
+
+  .panel {
+    @apply bg-white border border-[#e2e8f0] rounded-xl p-5 shadow-sentinel flex flex-col gap-4;
+  }
+
+  .panel-head {
+    @apply flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5;
+  }
+
+  .eyebrow {
+    @apply font-data text-[10px] font-bold uppercase tracking-wider text-slate-400 m-0 mb-1;
+  }
+
+  .data-label {
+    @apply font-data text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded;
+  }
+
+  /* Standard Buttons */
+  .btn-primary, .button.primary {
+    @apply inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2 px-3.5 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-none;
+  }
+
+  .btn-secondary, .button {
+    @apply inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-semibold py-2 px-3.5 rounded-lg border border-slate-200 shadow-sm transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer;
+  }
+
+  .btn-dark, .button.dark {
+    @apply inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 px-3.5 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98] cursor-pointer border-none;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 px-3.5 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98] cursor-pointer border-none;
+  }
+
+  .btn-warning {
+    @apply inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-2 px-3.5 rounded-lg shadow-sm transition-all duration-150 active:scale-[0.98] cursor-pointer border-none;
+  }
+
+  .icon-button {
+    @apply inline-flex items-center justify-center h-8 w-8 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80 transition-all active:scale-95 cursor-pointer bg-white;
+  }
+
+  /* Navigation Item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 cursor-pointer;
+  }
+
+  .nav-item.active {
+    @apply bg-white text-slate-900 shadow-sm border border-slate-200/80 font-semibold;
+  }
+
+  /* Badges & Status */
+  .trend-badge {
+    @apply inline-flex items-center gap-1 text-[11px] font-bold px-1.5 py-0.5 rounded font-data;
+  }
+
+  .trend-badge.danger {
+    @apply bg-red-50 text-red-600 border border-red-200/60;
+  }
+
+  .trend-badge.success {
+    @apply bg-emerald-50 text-emerald-600 border border-emerald-200/60;
+  }
+
+  .trend-badge.neutral {
+    @apply bg-slate-100 text-slate-600;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide;
+  }
+
+  .status-pill.black {
+    @apply bg-slate-900 text-white;
+  }
+
+  .status-pill.red {
+    @apply bg-red-500 text-white;
+  }
+
+  .status-pill.amber {
+    @apply bg-amber-500 text-white;
+  }
+
+  .status-pill.green {
+    @apply bg-emerald-500 text-white;
+  }
+
+  /* Resource Grid Layouts */
+  .resource-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
+  }
+
+  .resource-card {
+    @apply bg-white border border-slate-200/90 rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-slate-300 transition-all;
+  }
+
+  /* Progress Bars */
+  .track {
+    @apply w-full h-2 bg-slate-100 rounded-full overflow-hidden;
+  }
+
+  .fill {
+    @apply h-full transition-all duration-300 rounded-full;
+  }
+
+  /* Validation Grid */
+  .validation-grid {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-5;
+  }
+
+  /* Data Table */
+  .sentinel-table {
+    @apply w-full border-collapse text-left text-xs;
+  }
+
+  .sentinel-table th {
+    @apply py-2.5 px-3 border-b border-slate-100 font-data text-[10px] font-bold uppercase tracking-wider text-slate-400;
+  }
+
+  .sentinel-table td {
+    @apply py-3 px-3 border-b border-slate-50 text-slate-700 font-medium;
+  }
+
+  .sentinel-table tr:hover td {
+    @apply bg-slate-50/70;
+  }
+
+  /* Acuity Pills */
+  .acuity {
+    @apply inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide uppercase;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================================================
+   Guide Me — Live Onboarding Tour Styling (Matches Reference Screenshot)
+   ========================================================================== */
+.driver-popover.medflow-tour-popover {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 1.25rem 1.25rem 1rem 1.25rem;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+  max-width: 360px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  color: #0f172a;
+}
+
+/* Blue Circular Assistant Bot Badge next to arrow */
+.medflow-tour-bot-badge {
+  position: absolute;
+  top: -16px;
+  left: -16px;
+  width: 36px;
+  height: 36px;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35);
+  z-index: 20;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35rem;
+  padding-right: 1.5rem;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-description {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #475569;
+  margin-bottom: 0.85rem;
+}
+
+/* Progress Bar under step counter */
+.medflow-tour-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.medflow-tour-progress-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--tour-progress, 0%);
+  background: #2563eb;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-progress-text {
+  font-size: 0.75rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+/* Styled "Next >" Pill Button with accent ring matching reference screenshot */
+.driver-popover.medflow-tour-popover .driver-popover-next-btn {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border: 2px solid #f59e0b !important;
+  border-radius: 9999px !important;
+  padding: 0.4rem 1.15rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  transition: all 0.15s ease;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-next-btn:hover {
+  background-color: #1d4ed8 !important;
+  transform: translateY(-0.5px);
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-prev-btn {
+  background: transparent !important;
+  color: #64748b !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 9999px !important;
+  padding: 0.35rem 0.85rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-prev-btn:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-close-btn {
+  color: #94a3b8 !important;
+  font-size: 1.1rem;
+  transition: color 0.15s ease;
+}
+
+.driver-popover.medflow-tour-popover .driver-popover-close-btn:hover {
+  color: #0f172a !important;
+}
+

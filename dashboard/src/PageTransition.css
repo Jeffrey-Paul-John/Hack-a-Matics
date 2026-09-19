@@ -1,0 +1,34 @@
+:root {
+  --plane: #f8fafc;
+  --accent: #cbd5e1;
+}
+
+.pageTransitionSheet {
+  position: fixed;
+  top: -10vh;
+  left: -20vw;
+  width: 140vw;
+  height: 120vh;
+  z-index: 300;
+  pointer-events: none;
+  will-change: transform;
+  background: var(--plane);
+}
+
+.pageTransitionSheet::before,
+.pageTransitionSheet::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent);
+}
+
+.pageTransitionSheet::before {
+  left: 0;
+}
+
+.pageTransitionSheet::after {
+  right: 0;
+}

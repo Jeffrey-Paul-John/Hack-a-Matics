@@ -1,0 +1,491 @@
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  BookOpen,
+  Download,
+  FileText,
+  FlaskConical,
+  GitFork,
+  LayoutGrid,
+  ShieldAlert,
+  ShieldPlus,
+  WifiOff,
+} from 'lucide-react'
+import { api } from './api/client'
+import type { ComparisonResult, Strategy } from './api/types'
+import { useLiveSocket } from './hooks/useLiveSocket'
+import { useSimulationState } from './hooks/useSimulationState'
+import { useSimulationStore } from './store/simulationStore'
+import { Sidebar, type TabKey } from './components/Sidebar'
+import { TopBar } from './components/TopBar'
+import { ExecutiveOverview } from './components/ExecutiveOverview'
+import { QueuePanel } from './components/QueuePanel'
+import { ResourceGrid } from './components/ResourceGrid'
+import { ScenarioControls } from './components/ScenarioControls'
+import { StrategyComparison } from './components/StrategyComparison'
+import { ValidationPanel } from './components/ValidationPanel'
+import { ChatWidget } from './components/ChatWidget'
+import { useTour } from './onboarding/useTour'
+import { useTranslation } from './onboarding/i18n'
+import { PageTransition } from './PageTransition'
+
+const VALID_TABS: TabKey[] = [
+  'overview',
+  'hospital-map',
+  'simulation-lab',
+  'policy-testing',
+  'alerts',
+  'reports',
+  'guide',
+  'settings',
+]
+
+const TAB_TITLE_KEYS: Record<TabKey, string> = {
+  overview: 'nav.overview',
+  'hospital-map': 'nav.hospitalMap',
+  'simulation-lab': 'nav.simulationLab',
+  'policy-testing': 'nav.policyTesting',
+  alerts: 'nav.alerts',
+  reports: 'nav.reports',
+  guide: 'nav.guide',
+  settings: 'nav.settings',
+}
+
+export default function App() {
+  const query = useSimulationState()
+  useLiveSocket()
+  const live = useSimulationStore(s => s.state)
+  const isConnected = useSimulationStore(s => s.isConnected) && !query.isError
+  const strategy = useSimulationStore(s => s.strategy)
+  const setStrategy = useSimulationStore(s => s.setStrategy)
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null)
+  const [isComparing, setIsComparing] = useState(false)
+  const [compareError, setCompareError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const { startTour, checkTourSeen } = useTour()
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const rawPath = location.pathname.replace(/^\//, '') as TabKey
+  const activeTab: TabKey = VALID_TABS.includes(rawPath) ? rawPath : 'overview'
+  const activeTabTitle = t(TAB_TITLE_KEYS[activeTab] || 'nav.overview')
+
+  const handleSelectTab = (tab: TabKey) => {
+    navigate(tab === 'overview' ? '/' : `/${tab}`)
+  }
+
+  const state = live ?? query.data
+
+  // Check tour completion and auto-invoke for genuinely new users once DOM mounts
+  useEffect(() => {
+    if (!state) return
+    let timer: number
+    void checkTourSeen('new-user-dashboard').then(seen => {
+      if (!seen) {
+        timer = window.setTimeout(() => {
+          startTour('new-user-dashboard')
+        }, 1200)
+      }
+    })
+    return () => clearTimeout(timer)
+  }, [state])
+
+  const runMonteCarlo = async (force = false) => {
+    try {
+      setIsComparing(true)
+      setCompareError(null)
+      const res = await api.compare(force)
+      setComparison(res)
+    } catch (err: unknown) {
+      setCompareError(err instanceof Error ? err.message : 'Monte Carlo evaluation failed')
+    } finally {
+      setIsComparing(false)
+    }
+  }
+
+  const act = async (work: () => Promise<unknown>) => {
+    try {
+      await work()
+      await query.refetch()
+    } catch {
+      /* Handled inside API client */
+    }
+  }
+
+  const switchStrategy = (next: Strategy) => {
+    setStrategy(next)
+    void act(() => api.switchStrategy(next))
+  }
+
+  const handleExportReport = () => {
+    if (!state) return
+    const reportData = {
+      timestamp: new Date().toISOString(),
+      simulation_time: state.now,
+      metrics: state.metrics,
+      queues: state.queues,
+      resources: state.resources,
+      strategy,
+    }
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `medflow-report-${state.now.replace(/[:.]/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (!state) {
+    return (
+      <main className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
+        <div className="bg-white border border-[#e2e8f0] rounded-2xl p-8 max-w-md w-full text-center shadow-float">
+          <div className="mx-auto w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center mb-4 font-bold text-sm">
+            MF
+          </div>
+          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+            Sentinel · Clinical Intelligence Desk
+          </h1>
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+            {query.error
+              ? 'Start the FastAPI backend at 127.0.0.1:8000 to connect this surveillance desk.'
+              : 'Establishing live connection to clinical simulation engine…'}
+          </p>
+          <button
+            className="w-full mt-6 py-2.5 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shadow-sm"
+            onClick={() => void act(() => api.start({ seed: 42, strategy }))}
+          >
+            Start Simulation Shift
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  const alertCount = state.metrics.sla_violations
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] flex">
+      {/* Left Sentinel Sidebar */}
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        alertCount={alertCount}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar
+          activeTabTitle={activeTabTitle}
+          isConnected={isConnected}
+          alertCount={alertCount}
+          onSearch={setSearchTerm}
+          onGuideMe={() => startTour('new-user-dashboard')}
+        />
+
+        <main className="flex-1 p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+          {/* Stale Telemetry Warning Banner */}
+          {!isConnected && (
+            <div className="mb-6 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-semibold animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <WifiOff size={16} />
+                <span>Connection to MedFlow backend interrupted. Telemetry is currently disconnected / stale.</span>
+              </div>
+              <button
+                onClick={() => void query.refetch()}
+                className="text-xs underline hover:text-red-900 font-bold"
+              >
+                Reconnect
+              </button>
+            </div>
+          )}
+
+          {/* Fast slanted route wipe transition */}
+          <PageTransition />
+
+          <Routes>
+            {/* ROUTE 1: EXECUTIVE OVERVIEW */}
+            <Route
+              path="/"
+              element={
+                <ExecutiveOverview
+                  state={state}
+                  strategy={strategy}
+                  comparison={comparison}
+                  isComparing={isComparing}
+                  onCompare={() => void runMonteCarlo(true)}
+                  onRefresh={() => void query.refetch()}
+                  onStep={() => void act(api.step)}
+                  onRun={() => void act(() => api.run(60))}
+                  onExportReport={handleExportReport}
+                  onSelectWard={() => handleSelectTab('hospital-map')}
+                />
+              }
+            />
+            <Route path="/overview" element={<Navigate to="/" replace />} />
+
+            {/* ROUTE 2: HOSPITAL MAP & QUEUES */}
+            <Route
+              path="/hospital-map"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                      {t('pages.hospitalMap.title')}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {t('pages.hospitalMap.desc')}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                    <QueuePanel queues={state.queues} />
+                    <ResourceGrid resources={state.resources} />
+                  </div>
+                </div>
+              }
+            />
+
+            {/* ROUTE 3: SIMULATION LAB */}
+            <Route
+              path="/simulation-lab"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                      {t('pages.simLab.title')}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {t('pages.simLab.desc')}
+                    </p>
+                  </div>
+                  <div className="sentinel-card">
+                    <ScenarioControls
+                      strategy={strategy}
+                      resources={state.resources}
+                      onStart={() => void act(() => api.start({ seed: 42, strategy }))}
+                      onStep={() => void act(api.step)}
+                      onRun={() => void act(() => api.run(60))}
+                      onCompare={() => void runMonteCarlo(true)}
+                      onStrategy={switchStrategy}
+                    />
+                  </div>
+                  <ResourceGrid resources={state.resources} />
+                </div>
+              }
+            />
+
+            {/* ROUTE 4: POLICY TESTING & MONTE CARLO */}
+            <Route
+              path="/policy-testing"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                        {t('pages.policy.title')}
+                      </h1>
+                      <p className="text-xs text-slate-500 font-medium mt-1">
+                        {t('pages.policy.desc')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => void runMonteCarlo(true)}
+                      disabled={isComparing}
+                      className="btn-primary"
+                    >
+                      {isComparing ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                          <span>{t('pages.policy.simulating')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <BarChart3 size={14} />
+                          <span>{t('pages.policy.runEvaluation')}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <StrategyComparison
+                    result={comparison}
+                    isLoading={isComparing}
+                    error={compareError}
+                    onRun={() => void runMonteCarlo(true)}
+                  />
+                  <ValidationPanel metrics={state.metrics} />
+                </div>
+              }
+            />
+
+            {/* ROUTE 5: ALERTS */}
+            <Route
+              path="/alerts"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                      {t('pages.alerts.title')}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {t('pages.alerts.desc')}
+                    </p>
+                  </div>
+                  <div className="sentinel-card">
+                    <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 mb-6">
+                      <ShieldAlert size={20} className="text-red-600 shrink-0" />
+                      <div>
+                        <strong className="text-xs">
+                          {state.metrics.sla_violations} {t('pages.alerts.breachesDetected')}
+                        </strong>
+                        <p className="text-[11px] text-red-700 mt-0.5">
+                          {t('pages.alerts.advice')}
+                        </p>
+                      </div>
+                    </div>
+                    <QueuePanel queues={state.queues} />
+                  </div>
+                </div>
+              }
+            />
+
+            {/* ROUTE 6: REPORTS & VALIDATION */}
+            <Route
+              path="/reports"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                        {t('pages.reports.title')}
+                      </h1>
+                      <p className="text-xs text-slate-500 font-medium mt-1">
+                        {t('pages.reports.desc')}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleExportReport}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
+                    >
+                      <Download size={14} />
+                      <span>{t('pages.reports.downloadJson')}</span>
+                    </button>
+                  </div>
+                  <ValidationPanel metrics={state.metrics} />
+                  <StrategyComparison
+                    result={comparison}
+                    isLoading={isComparing}
+                    error={compareError}
+                    onRun={() => void runMonteCarlo(true)}
+                  />
+                </div>
+              }
+            />
+
+            {/* ROUTE 7: GUIDE */}
+            <Route
+              path="/guide"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                      {t('pages.guide.title')}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {t('pages.guide.desc')}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="sentinel-card">
+                      <h2 className="text-sm font-bold text-slate-900 mb-2">
+                        {t('pages.guide.triagePolicies')}
+                      </h2>
+                      <ul className="text-xs text-slate-600 space-y-2 leading-relaxed">
+                        <li>
+                          <strong className="text-slate-800">Urgency Only:</strong> Ranks strictly by clinical acuity score (CRITICAL=100, HIGH=60, MODERATE=30, LOW=10).
+                        </li>
+                        <li>
+                          <strong className="text-slate-800">Wait Aware:</strong> Gradually elevates score as waiting time grows to prevent starvation.
+                        </li>
+                        <li>
+                          <strong className="text-slate-800">Resource Aware:</strong> Incorporates real-time asset scarcity to prevent bottlenecking.
+                        </li>
+                        <li>
+                          <strong className="text-slate-800">MDP Optimal:</strong> Uses value-iteration dynamic programming for optimal admission decisions.
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="sentinel-card">
+                      <h2 className="text-sm font-bold text-slate-900 mb-2">
+                        {t('pages.guide.mathValidation')}
+                      </h2>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        MedFlow separates theoretical validation from simulation execution:
+                      </p>
+                      <ul className="text-xs text-slate-600 mt-2 space-y-1.5 list-disc pl-4">
+                        <li>Erlang-C predicts queuing delay probability for stable load.</li>
+                        <li>Erlang-B predicts blocking probability for loss systems (ICU).</li>
+                        <li>Little's Law ($L = \lambda W$) validates empirical consistency.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+
+            {/* ROUTE 8: SETTINGS */}
+            <Route
+              path="/settings"
+              element={
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                      {t('pages.settings.title')}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      {t('pages.settings.desc')}
+                    </p>
+                  </div>
+                  <div className="sentinel-card">
+                    <h2 className="text-sm font-bold text-slate-900 mb-3">
+                      {t('pages.settings.connectionConfig')}
+                    </h2>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">{t('pages.settings.apiBase')}</span>
+                        <span className="font-mono font-bold text-slate-900">{api.base}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">{t('pages.settings.wsEndpoint')}</span>
+                        <span className="font-mono font-bold text-slate-900">{api.base.replace(/^http/, 'ws')}/ws/live</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">{t('pages.settings.backendStatus')}</span>
+                        <span className={`font-bold ${isConnected ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {isConnected ? t('pages.settings.online') : t('pages.settings.offline')}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-slate-500">{t('pages.settings.configSource')}</span>
+                        <span className="font-mono text-slate-700">config/config.yaml</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+
+            {/* FALLBACK ROUTE */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+
+      {/* Floating Sentinel Clinical Copilot */}
+      <ChatWidget />
+    </div>
+  )
+}

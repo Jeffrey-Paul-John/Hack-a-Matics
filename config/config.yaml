@@ -1,0 +1,47 @@
+seed: 42
+simulation_duration_minutes: 480
+arrival_rates_per_hour:
+  walkin: 12
+  ambulance: 2
+urgency_weights:
+  CRITICAL: 100
+  HIGH: 60
+  MODERATE: 30
+  LOW: 10
+urgency_distribution:
+  CRITICAL: 0.08
+  HIGH: 0.22
+  MODERATE: 0.40
+  LOW: 0.30
+priority:
+  urgency_weight: 1.0
+  wait_weight: 1.2
+  scarcity_weight: 12.0
+  max_acceptable_wait_minutes: 60
+  strategy: resource_aware
+strategies:
+  - urgency_only
+  - wait_aware
+  - resource_aware
+  - mdp_optimal
+capacities:
+  ER: {BED: 8, DOCTOR: 4, NURSE: 8, AMBULANCE: 2}
+  ICU: {ICU_BED: 5, DOCTOR: 3, NURSE: 6}
+  GENERAL: {BED: 14, DOCTOR: 5, NURSE: 10}
+service_minutes:
+  CRITICAL: 100
+  HIGH: 70
+  MODERATE: 45
+  LOW: 25
+sla_minutes:
+  CRITICAL: 5
+  HIGH: 20
+  MODERATE: 45
+  LOW: 90
+math:
+  markov_transition:
+    WAITING: {WAITING: 0.30, IN_TREATMENT: 0.65, ICU_ESCALATION: 0.03, TRANSFERRED: 0.01, DECEASED: 0.01}
+    IN_TREATMENT: {IN_TREATMENT: 0.55, DISCHARGED: 0.42, TRANSFERRED: 0.02, DECEASED: 0.01}
+    ICU_ESCALATION: {IN_TREATMENT: 0.70, TRANSFERRED: 0.15, DECEASED: 0.15}
+  validation_tolerance: 0.15
+  comparison_replications: 30
