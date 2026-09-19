@@ -45,3 +45,8 @@ math:
     ICU_ESCALATION: {IN_TREATMENT: 0.70, TRANSFERRED: 0.15, DECEASED: 0.15}
   validation_tolerance: 0.15
   comparison_replications: 30
+copilot:
+  model: llama-3.3-70b-versatile
+  fallback_model: openai/gpt-oss-120b
+  temperature: 0.2
+  max_tokens: 512
