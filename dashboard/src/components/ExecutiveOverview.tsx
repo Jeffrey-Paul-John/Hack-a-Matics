@@ -202,7 +202,7 @@ export function ExecutiveOverview({
         </div>
       </div>
 
-      {/* Row of 6 Sentinel Metric Cards */}
+      {/* Row of 6 Metric Cards */}
       <div data-tour="metrics-strip" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* Card 1: Active Queue */}
         <div className="metric-card">

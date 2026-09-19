@@ -5,15 +5,18 @@ import {
   AlertCircle,
   BarChart3,
   BookOpen,
+  CheckCircle2,
   Download,
   FileText,
   FlaskConical,
   GitFork,
+  Info,
   LayoutGrid,
   ShieldAlert,
   ShieldPlus,
   Sparkles,
   WifiOff,
+  X,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from './api/client'
@@ -39,6 +42,7 @@ import { useTour } from './onboarding/useTour'
 import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
 import { PageTransition } from './PageTransition'
+import { useDuplicateControlsCheck } from './hooks/useDuplicateControlsCheck'
 
 const VALID_TABS: TabKey[] = [
   'overview',
@@ -65,6 +69,8 @@ const TAB_TITLE_KEYS: Record<TabKey, string> = {
 export default function App() {
   const query = useSimulationState()
   useLiveSocket()
+  // Dev-only: warn in the console if two visible controls share the same label.
+  useDuplicateControlsCheck()
   const live = useSimulationStore(s => s.state)
   const isConnected = useSimulationStore(s => s.isConnected) && !query.isError
   const connectionStatus = useSimulationStore(s => s.connectionStatus)
@@ -594,35 +600,36 @@ export default function App() {
         alertCount={alertCount}
       />
 
-      {/* Global Action Failure / Success Toast Alert */}
+      {/* Global Action Failure / Success Toast Alert - Relocated to top-right to prevent overlapping floating chatbot */}
       {notification && (
         <div
-          className={`fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold animate-fadeIn border transition-all ${
+          role="status"
+          aria-live="polite"
+          className={`fixed top-20 right-4 sm:right-6 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 text-xs font-semibold animate-fadeIn border transition-all ${
             notification.type === 'error'
-              ? 'bg-rose-950 text-rose-100 border-rose-800'
+              ? 'bg-rose-950/95 text-rose-100 border-rose-700/80 shadow-rose-950/30'
               : notification.type === 'success'
-              ? 'bg-slate-900 text-emerald-400 border-slate-800'
-              : 'bg-slate-900 text-white border-slate-800'
+              ? 'bg-slate-900/95 text-emerald-300 border-emerald-500/40 shadow-slate-950/40'
+              : 'bg-slate-900/95 text-white border-slate-700/80 shadow-slate-950/40'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                notification.type === 'error'
-                  ? 'bg-rose-500'
-                  : notification.type === 'success'
-                  ? 'bg-emerald-400'
-                  : 'bg-blue-400'
-              }`}
-            />
-            <span>{notification.message}</span>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {notification.type === 'error' ? (
+              <AlertCircle size={15} className="text-rose-400 shrink-0" />
+            ) : notification.type === 'success' ? (
+              <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+            ) : (
+              <Info size={15} className="text-blue-400 shrink-0" />
+            )}
+            <span className="truncate">{notification.message}</span>
           </div>
           <button
             onClick={clearNotification}
-            className="p-1 text-slate-400 hover:text-white cursor-pointer"
+            className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
             title="Dismiss notification"
+            aria-label="Dismiss notification"
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
       )}
