@@ -1,9 +1,77 @@
 """Live Clinical Operations Copilot answering questions from real-time simulation telemetry."""
 from __future__ import annotations
+import logging
+import os
 from typing import TYPE_CHECKING
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..simulation.engine import SimulationEngine
+
+SARVAM_LANG_MAP = {
+    "hi": "hi-IN",
+    "kn": "kn-IN",
+    "te": "te-IN",
+    "ta": "ta-IN",
+    "mr": "mr-IN",
+    "bn": "bn-IN",
+    "gu": "gu-IN",
+    "ml": "ml-IN",
+    "pa": "pa-IN",
+    "od": "od-IN",
+}
+
+FALLBACK_PREFIXES = {
+    "hi": "[हिंदी] सिमुलेशन समय",
+    "ta": "[தமிழ்] உருவகப்படுத்துதல் நேரம்",
+    "te": "[తెలుగు] సిమ్యులేషన్ సమయం",
+    "kn": "[ಕನ್ನಡ] ಸಿಮ್ಯುಲೇಶನ್ ಸಮಯ",
+    "mr": "[मराठी] सिम्युलेशन वेळ",
+    "bn": "[বাংলা] সিমুলেশন সময়",
+}
+
+
+def translate_with_sarvam(text: str, target_lang: str) -> str | None:
+    """Translate text using Sarvam AI Mayura translation API if key is configured."""
+    api_key = os.getenv("SARVAM_API_KEY")
+    if not api_key:
+        return None
+
+    target_code = SARVAM_LANG_MAP.get(target_lang)
+    if not target_code:
+        return None
+
+    try:
+        res = requests.post(
+            "https://api.sarvam.ai/translate",
+            headers={
+                "api-subscription-key": api_key.strip(),
+                "Content-Type": "application/json",
+            },
+            json={
+                "input": text,
+                "source_language_code": "en-IN",
+                "target_language_code": target_code,
+                "model": "mayura:v1",
+                "mode": "formal",
+            },
+            timeout=5.0,
+        )
+        if res.status_code == 200:
+            data = res.json()
+            translated = data.get("translated_text")
+            if translated:
+                return translated.strip()
+        else:
+            logger.warning("Sarvam API returned status %s: %s", res.status_code, res.text)
+    except Exception as exc:
+        logger.warning("Sarvam translation call failed: %s", exc)
+
+    return None
 
 
 def answer_clinical_query(engine: SimulationEngine, message: str, language: str = "en") -> str:
@@ -76,18 +144,13 @@ def answer_clinical_query(engine: SimulationEngine, message: str, language: str 
             f"Average wait {avg_wait:.1f} min across {completed} completed patients. SLA breaches: {sla_breaches}."
         )
 
-    # Multilingual translation formatting for Indian languages (Sarvam support)
-    if language == "hi":
-        return f"[हिंदी] सिमुलेशन समय {sim_time} पर: {summary_text}"
-    elif language == "ta":
-        return f"[தமிழ்] உருவகப்படுத்துதல் நேரம் {sim_time}: {summary_text}"
-    elif language == "te":
-        return f"[తెలుగు] సిమ్యులేషన్ సమయం {sim_time}: {summary_text}"
-    elif language == "kn":
-        return f"[ಕನ್ನಡ] ಸಿಮ್ಯುಲೇಶನ್ ಸಮಯ {sim_time}: {summary_text}"
-    elif language == "mr":
-        return f"[मराठी] सिम्युलेशन वेळ {sim_time}: {summary_text}"
-    elif language == "bn":
-        return f"[বাংলা] সিমুলেশন সময় {sim_time}: {summary_text}"
+    # Live Sarvam translation or fallback
+    if language != "en" and language in SARVAM_LANG_MAP:
+        sarvam_res = translate_with_sarvam(summary_text, language)
+        if sarvam_res:
+            return sarvam_res
+        # Fallback if offline or API key unavailable
+        prefix = FALLBACK_PREFIXES.get(language, f"[{language}]")
+        return f"{prefix} {sim_time}: {summary_text}"
 
     return summary_text
