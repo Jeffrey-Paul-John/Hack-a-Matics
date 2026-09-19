@@ -42,11 +42,37 @@ class SimulationEngine:
             self.clock.advance_to(next_departure[0]); self.departures.remove(next_departure); patient = self._patient(next_departure[1])
             if patient:
                 for resource_id in patient.assigned_resources.values(): self.manager.release(resource_id)
-                patient.status = PatientStatus.DISCHARGED; self.metrics.discharge(patient, self.clock.now, self.config["sla_minutes"])
+                patient.status = PatientStatus.DISCHARGED
+                if patient.treatment_start:
+                    patient.treatment_duration_minutes = round((self.clock.now - patient.treatment_start).total_seconds() / 60, 2)
+                self.metrics.discharge(patient, self.clock.now, self.config["sla_minutes"])
         for event in self.allocator.tick(self.clock.now):
             if event.allocated:
-                patient = self._patient(event.patient_id); service = self.config["service_minutes"][patient.urgency.value]; self.departures.append((self.clock.now + timedelta(minutes=service), patient.id))
+                patient = self._patient(event.patient_id)
+                if patient:
+                    patient.status = PatientStatus.IN_TREATMENT
+                    patient.treatment_start = self.clock.now
+                    patient.actual_wait_minutes = round((self.clock.now - patient.wait_start).total_seconds() / 60, 2)
+                    service = self.config["service_minutes"][patient.urgency.value]
+                    self.departures.append((self.clock.now + timedelta(minutes=service), patient.id))
         self.metrics.snapshot(self.clock.now, self.departments); return self.state()
+    def switch_strategy(self, strategy: str) -> None:
+        """Hot-swap allocation strategy in-place without resetting clock, queues, or resources."""
+        classes = {"urgency_only": UrgencyOnlyStrategy, "wait_aware": WaitAwareStrategy, "resource_aware": ResourceAwareStrategy, "mdp_optimal": MDPOptimalStrategy}
+        if strategy not in classes:
+            raise ValueError(f"Unknown strategy '{strategy}'. Valid: {list(classes.keys())}")
+        pr = self.config["priority"]
+        context = SimulationContext(self.config["urgency_weights"], pr["wait_weight"], pr["scarcity_weight"], pr["max_acceptable_wait_minutes"], {})
+        self.allocator.engine = PriorityEngine(classes[strategy](), context)
+        for event in self.allocator.tick(self.clock.now):
+            if event.allocated:
+                patient = self._patient(event.patient_id)
+                if patient:
+                    patient.status = PatientStatus.IN_TREATMENT
+                    patient.treatment_start = self.clock.now
+                    patient.actual_wait_minutes = round((self.clock.now - patient.wait_start).total_seconds() / 60, 2)
+                    service = self.config["service_minutes"][patient.urgency.value]
+                    self.departures.append((self.clock.now + timedelta(minutes=service), patient.id))
     def run(self, duration: int | None = None) -> dict:
         """Run headlessly through a finite horizon for reporting and comparison."""
         end = self.clock.now + timedelta(minutes=duration or self.config["simulation_duration_minutes"]); self.running = True

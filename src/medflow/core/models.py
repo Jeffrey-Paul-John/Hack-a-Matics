@@ -25,6 +25,9 @@ class Patient(BaseModel):
     id: str; name: str; arrival_time: datetime; urgency: Urgency
     department_needed: DepartmentType | str; resource_requirements: list[ResourceType | str]
     wait_start: datetime; status: PatientStatus = PatientStatus.WAITING
+    treatment_start: Optional[datetime] = None
+    actual_wait_minutes: float = 0.0
+    treatment_duration_minutes: float = 0.0
     assigned_resources: dict[ResourceType | str, str] = Field(default_factory=dict)
     priority_score: float = 0.0
 

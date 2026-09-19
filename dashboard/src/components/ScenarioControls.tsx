@@ -1,8 +1,20 @@
 import { useState } from 'react'
-import { AlertTriangle, BarChart2, FastForward, Play, Siren, StepForward, UserRoundX } from 'lucide-react'
+import {
+  AlertTriangle,
+  BarChart2,
+  FastForward,
+  Play,
+  Save,
+  DownloadCloud,
+  Siren,
+  Sparkles,
+  StepForward,
+  UserRoundX,
+} from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { ResourcePool, Strategy } from '../api/types'
+import { useSimulationStore } from '../store/simulationStore'
 
 type Props = {
   strategy: Strategy
@@ -12,6 +24,8 @@ type Props = {
   onRun: () => void
   onCompare: () => void
   onStrategy: (strategy: Strategy) => void
+  onOpenWhatIf?: () => void
+  onRefresh?: () => void
 }
 
 export function ScenarioControls({
@@ -22,11 +36,15 @@ export function ScenarioControls({
   onRun,
   onCompare,
   onStrategy,
+  onOpenWhatIf,
+  onRefresh,
 }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isBusy, setIsBusy] = useState(false)
   const [selectedAssetId, setSelectedAssetId] = useState<string>('')
   const [selectedResourceType, setSelectedResourceType] = useState<string>('')
+
+  const notify = useSimulationStore(s => s.notify)
 
   // Fetch dynamic metadata from backend configuration
   const metaQuery = useQuery({
@@ -60,8 +78,9 @@ export function ScenarioControls({
     'mdp_optimal',
   ]
 
-  const showFeedback = (msg: string) => {
+  const showFeedback = (msg: string, isError = false) => {
     setFeedback(msg)
+    notify(msg, isError ? 'error' : 'success')
     setTimeout(() => setFeedback(null), 3500)
   }
 
@@ -70,8 +89,9 @@ export function ScenarioControls({
       setIsBusy(true)
       await action()
       showFeedback(`✓ ${name} applied`)
+      onRefresh?.()
     } catch (err: unknown) {
-      showFeedback(`✕ ${name} failed: ${err instanceof Error ? err.message : 'error'}`)
+      showFeedback(`✕ ${name} failed: ${err instanceof Error ? err.message : 'connection error'}`, true)
     } finally {
       setIsBusy(false)
     }
@@ -80,7 +100,7 @@ export function ScenarioControls({
   const handleFailTarget = () => {
     const target = selectedAssetId || (availableAssets.length > 0 ? availableAssets[0].id : null)
     if (!target) {
-      showFeedback('✕ No active available resources to fail')
+      showFeedback('✕ No active available resources to fail', true)
       return
     }
     void handleAction(`Asset Failure (${target})`, () => api.failResource(target))
@@ -89,7 +109,7 @@ export function ScenarioControls({
   const handleShortageTarget = () => {
     const targetType = selectedResourceType || (resourceTypes.length > 0 ? resourceTypes[0] : null)
     if (!targetType) {
-      showFeedback('✕ No resource types available for shortage')
+      showFeedback('✕ No resource types available for shortage', true)
       return
     }
     void handleAction(`25% ${targetType} Shortage`, () => api.shortage(targetType, 0.25))
@@ -99,7 +119,7 @@ export function ScenarioControls({
     <section className="flex flex-col gap-5">
       {/* Top Bar: Stepping Controls & Strategy Policy */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
-        <div data-tour="sim-controls" className="flex flex-wrap items-center gap-2.5">
+        <div data-tour="sim-controls" className="flex flex-wrap items-center gap-2">
           <button
             className="btn-primary"
             onClick={onStart}
@@ -107,7 +127,7 @@ export function ScenarioControls({
             title="Re-seed and restart simulation shift"
           >
             <Play size={14} className="fill-white" />
-            <span>Start New Shift</span>
+            <span>Start Shift</span>
           </button>
 
           <button
@@ -117,7 +137,7 @@ export function ScenarioControls({
             title="Advance exactly one arrival or departure event"
           >
             <StepForward size={14} className="text-slate-700" />
-            <span>Advance Single Event</span>
+            <span>Step Event</span>
           </button>
 
           <button
@@ -127,12 +147,32 @@ export function ScenarioControls({
             title="Advance clock by 60 minutes headlessly"
           >
             <FastForward size={14} className="text-slate-700" />
-            <span>Fast-Forward 60 Min</span>
+            <span>Fast-Forward 60m</span>
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => handleAction('State Snapshot Saved', api.saveSim)}
+            disabled={isBusy}
+            title="Save current simulation snapshot to disk"
+          >
+            <Save size={13} className="text-slate-700" />
+            <span>Save</span>
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => handleAction('State Resumed from Disk', api.resumeSim)}
+            disabled={isBusy}
+            title="Resume simulation from saved disk snapshot"
+          >
+            <DownloadCloud size={13} className="text-slate-700" />
+            <span>Resume</span>
           </button>
         </div>
 
-        {/* Active Policy Selector & Monte Carlo Evaluation */}
-        <div data-tour="strategy-switcher" className="flex flex-wrap items-center gap-3">
+        {/* Active Policy Selector & Monte Carlo / What-If Evaluation */}
+        <div data-tour="strategy-switcher" className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
             <span className="text-xs text-slate-500 font-semibold">Triage Policy:</span>
             <select
@@ -148,6 +188,18 @@ export function ScenarioControls({
               ))}
             </select>
           </div>
+
+          {onOpenWhatIf && (
+            <button
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+              onClick={onOpenWhatIf}
+              disabled={isBusy}
+              title="Test 'What If?' counterfactual branch (e.g. +2 nurses) without restarting"
+            >
+              <Sparkles size={14} />
+              <span>"What If?" Sandbox</span>
+            </button>
+          )}
 
           <button
             className="btn-dark"

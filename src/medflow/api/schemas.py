@@ -7,3 +7,7 @@ class ShortageRequest(BaseModel): resource_type: str; percent: float = Field(def
 class FailureRequest(BaseModel): resource_id: str
 class StrategyRequest(BaseModel): strategy: str
 class ChatRequest(BaseModel): message: str; language: str = "en"
+class WhatIfRequest(BaseModel):
+    horizon_minutes: int = Field(default=60, ge=15, le=480)
+    resource_adjustments: dict[str, dict[str, int]] = Field(default_factory=dict)
+    strategy: str | None = None

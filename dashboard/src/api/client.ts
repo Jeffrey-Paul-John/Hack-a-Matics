@@ -1,20 +1,55 @@
-import type { Benchmarks, ComparisonResult, FailureRequest, RunRequest, ShortageRequest, SimulationState, StartRequest, Strategy, SurgeRequest, Validation } from './types'
+import type {
+  Benchmarks,
+  ComparisonResult,
+  FailureRequest,
+  RunRequest,
+  ShortageRequest,
+  SimulationState,
+  StartRequest,
+  Strategy,
+  SurgeRequest,
+  Validation,
+  WhatIfRequest,
+  WhatIfResponse,
+} from './types'
 
 const base = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
+export function getSessionId(): string {
+  try {
+    let sid = localStorage.getItem('medflow_session_id')
+    if (!sid || sid.trim().length === 0) {
+      sid = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      localStorage.setItem('medflow_session_id', sid)
+    }
+    return sid
+  } catch {
+    return 'default_session'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const sessionId = getSessionId()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Session-ID': sessionId,
+    ...(init?.headers as Record<string, string>),
+  }
+
   const response = await fetch(`${base}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers,
   })
   if (!response.ok) {
-    throw new Error((await response.text()) || 'The command desk could not reach MedFlow.')
+    const errorText = await response.text()
+    throw new Error(errorText || `Command failed with status ${response.status}`)
   }
   return response.json() as Promise<T>
 }
 
 export const api = {
   base,
+  getSessionId,
   state: () => request<SimulationState>('/simulation/state'),
   start: (body: StartRequest) =>
     request<SimulationState>('/simulation/start', { method: 'POST', body: JSON.stringify(body) }),
@@ -43,6 +78,12 @@ export const api = {
     }),
   switchStrategy: (strategy: Strategy) =>
     request<SimulationState>('/strategy/switch', { method: 'POST', body: JSON.stringify({ strategy }) }),
+  whatIf: (body: WhatIfRequest) =>
+    request<WhatIfResponse>('/scenario/what-if', { method: 'POST', body: JSON.stringify(body) }),
+  saveSim: () =>
+    request<{ status: string; filepath: string; time: number }>('/sim/save', { method: 'POST' }),
+  resumeSim: () =>
+    request<SimulationState>('/sim/resume', { method: 'POST' }),
   compare: (force = false, replications?: number) => {
     const params = new URLSearchParams()
     if (force) params.set('force', 'true')
@@ -75,3 +116,4 @@ export const api = {
       { method: 'POST' }
     ),
 }
+

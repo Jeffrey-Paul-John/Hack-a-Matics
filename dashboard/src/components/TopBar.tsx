@@ -1,23 +1,31 @@
-import { Bell, Compass, Globe, LogOut, Search, UserCheck } from 'lucide-react'
+import { Bell, Compass, Globe, LogOut, Search, Sparkles, UserCheck, RefreshCw } from 'lucide-react'
 import { SUPPORTED_LANGUAGES, useLanguageStore, useTranslation, type SupportedLanguage } from '../onboarding/i18n'
+import type { ConnectionStatus } from '../store/simulationStore'
 
 interface TopBarProps {
   activeTabTitle: string
   isConnected: boolean
+  connectionStatus?: ConnectionStatus
   alertCount?: number
   onSearch?: (term: string) => void
   onGuideMe?: () => void
+  onOpenWhatIf?: () => void
 }
 
 export function TopBar({
   activeTabTitle,
   isConnected,
+  connectionStatus = 'connected',
   alertCount = 0,
   onSearch,
   onGuideMe,
+  onOpenWhatIf,
 }: TopBarProps) {
   const { language, setLanguage } = useLanguageStore()
   const { t } = useTranslation()
+
+  const isReconnecting = connectionStatus === 'reconnecting'
+  const isOffline = connectionStatus === 'disconnected' || !isConnected
 
   return (
     <header className="h-16 bg-white border-b border-[#e2e8f0] px-6 flex items-center justify-between gap-4 sticky top-0 z-20">
@@ -44,6 +52,18 @@ export function TopBar({
 
       {/* Top Right Controls & Status */}
       <div className="flex items-center gap-3">
+        {/* "What If?" Sandbox Direct Button */}
+        {onOpenWhatIf && (
+          <button
+            onClick={onOpenWhatIf}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-200/80 text-indigo-700 hover:bg-indigo-100 transition-all text-xs font-bold shadow-xs cursor-pointer"
+            title="Open 'What If?' Counterfactual Comparison Sandbox"
+          >
+            <Sparkles size={14} className="text-indigo-600" />
+            <span>"What If?" Sandbox</span>
+          </button>
+        )}
+
         {/* "Guide Me" Live Onboarding Tour Button */}
         <button
           data-tour="guide-me-btn"
@@ -75,23 +95,34 @@ export function TopBar({
           </select>
         </div>
 
-        {/* System Calibrated Status Badge with data-tour */}
+        {/* Dynamic Telemetry Status Badge with Reconnection indicator */}
         <div
           data-tour="system-status"
-          className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
-            isConnected
-              ? 'bg-slate-50 text-slate-700 border-slate-200'
-              : 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+          className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+            isReconnecting
+              ? 'bg-amber-50 text-amber-800 border-amber-300'
+              : isOffline
+              ? 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+              : 'bg-slate-50 text-slate-700 border-slate-200'
           }`}
         >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-emerald-500' : 'bg-red-500'
-            }`}
-          />
-          <span className="hidden sm:inline">
-            {isConnected ? t('topbar.calibrated') : t('topbar.disconnected')}
-          </span>
+          {isReconnecting ? (
+            <>
+              <RefreshCw size={11} className="animate-spin text-amber-600" />
+              <span>Reconnecting...</span>
+            </>
+          ) : (
+            <>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  !isOffline ? 'bg-emerald-500' : 'bg-red-500'
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {!isOffline ? t('topbar.calibrated') : 'Backend Unavailable'}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Alerts Bell with Badge */}

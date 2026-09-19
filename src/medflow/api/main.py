@@ -1,16 +1,33 @@
-"""FastAPI entry point and lightweight route wiring."""
+"""FastAPI entry point and lightweight route wiring with multi-tenant session isolation."""
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import os
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
 from ..core.models import ResourceType
 from ..simulation.engine import SimulationEngine
 from ..simulation.scenario_controller import ScenarioController
+from ..simulation.persistence import save_snapshot, load_snapshot
+from ..simulation.counterfactual import run_what_if_comparison
 from ..utils.config_loader import load_config
-from .schemas import ChatRequest, FailureRequest, RunRequest, ShortageRequest, StartRequest, StrategyRequest, SurgeRequest
+from .schemas import (
+    ChatRequest,
+    FailureRequest,
+    RunRequest,
+    ShortageRequest,
+    StartRequest,
+    StrategyRequest,
+    SurgeRequest,
+    WhatIfRequest,
+)
 from .chat_service import answer_clinical_query, detect_input_language
+from .session_manager import SessionManager
 from .websocket_manager import ConnectionManager
 from ..math.monte_carlo import aggregate, run_replications
 from ..math.validation import benchmarks, run_validation_suite
+
 app = FastAPI(title="MedFlow API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -20,35 +37,106 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-config = load_config(); engine: SimulationEngine = SimulationEngine(config); sockets = ConnectionManager()
-def current() -> SimulationEngine:
-    """Ensure commands operate on an active simulation."""
-    global engine
-    if engine is None: engine = SimulationEngine(config)
-    return engine
+
+config = load_config()
+sessions = SessionManager(lambda: load_config())
+sockets = ConnectionManager()
+
+# Resume default session from snapshot if available on disk
+SNAPSHOT_FILE = "data/sim_snapshot.json"
+if os.path.exists(SNAPSHOT_FILE):
+    try:
+        sessions.default_engine = load_snapshot(SNAPSHOT_FILE, config)
+    except Exception:
+        pass
+
+
+def _extract_session_id(request: Request | None) -> str:
+    """Extract session token from request headers, query parameters, or cookies."""
+    if not request:
+        return "default"
+    token = (
+        request.headers.get("X-Session-ID")
+        or request.query_params.get("session_id")
+        or request.cookies.get("session_id")
+        or "default"
+    )
+    return token.strip() or "default"
+
+
+def current(request: Request | None = None) -> SimulationEngine:
+    """Ensure operations target the caller's dedicated isolated simulation session."""
+    session_id = _extract_session_id(request)
+    return sessions.get_or_create(session_id)
+
+
+# Expose global engine reference for backward compatibility with external scripts/tests
+@property
+def engine():
+    return sessions.default_engine
+
+
 @app.post("/simulation/start")
-async def start(body: StartRequest = StartRequest()):
+async def start(body: StartRequest = StartRequest(), request: Request = None):
     """Create a seeded simulation through the domain service."""
-    global engine; engine = SimulationEngine(config, body.seed, body.strategy); return engine.state()
+    session_id = _extract_session_id(request)
+    new_engine = sessions.reset_session(session_id, body.seed, body.strategy)
+    state = new_engine.state()
+    await sockets.broadcast(state, session_id)
+    return state
+
+
 @app.post("/simulation/step")
-async def step():
-    state = current().step(); await sockets.broadcast(state); return state
+async def step(request: Request = None):
+    session_id = _extract_session_id(request)
+    engine_inst = current(request)
+    state = engine_inst.step()
+    await sockets.broadcast(state, session_id)
+    return state
+
+
 @app.post("/simulation/run")
-async def run(body: RunRequest):
-    state = current().run(body.duration); await sockets.broadcast(state); return state
+async def run(body: RunRequest, request: Request = None):
+    session_id = _extract_session_id(request)
+    engine_inst = current(request)
+    state = engine_inst.run(body.duration)
+    await sockets.broadcast(state, session_id)
+    return state
+
+
 @app.post("/simulation/reset")
-async def reset():
-    global engine; engine = SimulationEngine(config); return {"reset": True}
+async def reset(request: Request = None):
+    session_id = _extract_session_id(request)
+    sessions.reset_session(session_id)
+    return {"reset": True, "session_id": session_id}
+
+
 @app.get("/simulation/state")
-def state(): return current().state()
+def state(request: Request = None):
+    return current(request).state()
+
+
 @app.get("/metrics/utilization")
-def utilization(): return current().metrics.summary()["utilization"]
+def utilization(request: Request = None):
+    return current(request).metrics.summary()["utilization"]
+
+
 @app.get("/metrics/wait-times")
-def waits(): return current().metrics.summary()["wait_by_urgency"]
+def waits(request: Request = None):
+    return current(request).metrics.summary()["wait_by_urgency"]
+
+
 @app.post("/scenario/surge")
-def surge(body: SurgeRequest): ScenarioController(current()).trigger_surge(body.multiplier); return {"applied": True}
+def surge(body: SurgeRequest, request: Request = None):
+    ScenarioController(current(request)).trigger_surge(body.multiplier)
+    return {"applied": True}
+
+
 @app.post("/scenario/shortage")
-def shortage(body: ShortageRequest): return {"removed": ScenarioController(current()).shortage(ResourceType(body.resource_type), body.percent)}
+def shortage(body: ShortageRequest, request: Request = None):
+    return {"removed": ScenarioController(current(request)).shortage(ResourceType(body.resource_type), body.percent)}
+
+
 @app.get("/meta/config")
 @app.get("/meta/enums")
 def meta_config():
@@ -60,25 +148,73 @@ def meta_config():
         "urgency_levels": list(config["urgency_weights"].keys()),
         "capacities": config["capacities"],
     }
+
+
 @app.post("/chat")
-def chat(body: ChatRequest):
+def chat(body: ChatRequest, request: Request = None):
     """Clinical copilot answering queries using live simulation telemetry only."""
     detected = detect_input_language(body.message)
     effective_lang = detected if (body.language == "en" and detected) else body.language
-    reply = answer_clinical_query(current(), body.message, effective_lang)
+    reply = answer_clinical_query(current(request), body.message, effective_lang)
     return {"reply": reply, "language": effective_lang}
+
+
 @app.post("/scenario/fail-resource")
-def failure(body: FailureRequest):
-    success = ScenarioController(current()).fail_resource(body.resource_id)
+def failure(body: FailureRequest, request: Request = None):
+    success = ScenarioController(current(request)).fail_resource(body.resource_id)
     if not success:
         raise HTTPException(404, f"Resource '{body.resource_id}' does not exist among active simulation assets")
     return {"failed": True, "resource_id": body.resource_id}
+
+
 @app.post("/strategy/switch")
-def switch(body: StrategyRequest):
-    global engine; old = current(); engine = SimulationEngine(config, old.seed, body.strategy); return engine.state()
-from concurrent.futures import ThreadPoolExecutor
+def switch(body: StrategyRequest, request: Request = None):
+    """Hot-swap allocation strategy in-place without restarting simulation."""
+    engine_inst = current(request)
+    engine_inst.switch_strategy(body.strategy)
+    return engine_inst.state()
+
+
+@app.post("/scenario/what-if")
+def what_if(body: WhatIfRequest, request: Request = None):
+    """Evaluate counterfactual operational scenario without modifying active simulation."""
+    engine_inst = current(request)
+    return run_what_if_comparison(
+        current_engine=engine_inst,
+        config=config,
+        horizon_minutes=body.horizon_minutes,
+        resource_adjustments=body.resource_adjustments,
+        strategy_override=body.strategy,
+    )
+
+
+@app.post("/sim/save")
+def save_sim(request: Request = None):
+    """Save snapshot of current simulation state to disk."""
+    session_id = _extract_session_id(request)
+    engine_inst = current(request)
+    path = f"data/snapshots/{session_id}_snapshot.json" if session_id != "default" else SNAPSHOT_FILE
+    saved_path = save_snapshot(engine_inst, path)
+    return {"saved": True, "path": saved_path, "clock": engine_inst.clock.now.isoformat()}
+
+
+@app.post("/sim/resume")
+def resume_sim(request: Request = None):
+    """Resume simulation state from disk snapshot."""
+    session_id = _extract_session_id(request)
+    path = f"data/snapshots/{session_id}_snapshot.json" if session_id != "default" else SNAPSHOT_FILE
+    if not os.path.exists(path):
+        raise HTTPException(404, f"No snapshot found at '{path}'")
+    loaded = load_snapshot(path, config)
+    if session_id == "default":
+        sessions.default_engine = loaded
+    else:
+        sessions.sessions[session_id] = (loaded, datetime.now(timezone.utc).timestamp())
+    return {"resumed": True, "clock": loaded.clock.now.isoformat()}
+
 
 _cached_comparison: dict | None = None
+
 
 @app.get("/strategy/compare")
 @app.post("/strategy/compare")
@@ -90,28 +226,39 @@ def compare(replications: int | None = None, force: bool = False):
 
     strategies = config.get("strategies", ["urgency_only", "wait_aware", "resource_aware", "mdp_optimal"])
     duration = config.get("simulation_duration_minutes", 480)
-    with ThreadPoolExecutor(max_workers=min(len(strategies), 4)) as executor:
+
+    with ThreadPoolExecutor(max_workers=min(4, len(strategies))) as executor:
         futures = {name: executor.submit(run_replications, name, config, reps, None, duration) for name in strategies}
         res = {name: aggregate(future.result()) for name, future in futures.items()}
 
     _cached_comparison = {"_reps": reps, "data": res}
     return res
+
+
 @app.get("/math/benchmarks")
-def math_benchmarks(): return benchmarks(config)
+def math_benchmarks():
+    return benchmarks(config)
+
+
 @app.get("/math/validation")
-def math_validation(): return run_validation_suite(config, current().metrics.summary() if engine else None)
+def math_validation(request: Request = None):
+    return run_validation_suite(config, current(request).metrics.summary())
+
+
 @app.websocket("/ws/live")
-async def live(socket: WebSocket):
-    await sockets.connect(socket)
+async def live(socket: WebSocket, session_id: str = "default"):
+    await sockets.connect(socket, session_id)
     try:
         while True:
-            await socket.receive_text()
+            msg = await socket.receive_text()
+            if msg == "ping":
+                await socket.send_text("pong")
     except WebSocketDisconnect:
         sockets.disconnect(socket)
 
-from datetime import datetime, timezone
 
 _user_onboarding: dict[str, dict] = {}
+
 
 @app.get("/users/me/onboarding/{tour_id}/status")
 def onboarding_status(tour_id: str):
@@ -122,6 +269,7 @@ def onboarding_status(tour_id: str):
         "completed_at": record.get("completed_at") if record else None,
     }
 
+
 @app.post("/users/me/onboarding/{tour_id}/complete")
 def onboarding_complete(tour_id: str):
     completed_at = datetime.now(timezone.utc).isoformat()
@@ -131,5 +279,3 @@ def onboarding_complete(tour_id: str):
         "completed": True,
         "completed_at": completed_at,
     }
-
-

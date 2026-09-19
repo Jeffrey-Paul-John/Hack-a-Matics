@@ -26,9 +26,26 @@ export interface ResourcePool {
 export interface Metrics {
   patients_completed: number
   average_wait_minutes: number
+  average_treatment_minutes?: number
   wait_by_urgency: Record<string, { average: number; max: number }>
   sla_violations: number
   utilization: Record<string, number>
+}
+
+export interface WhatIfDelta {
+  wait_minutes: number
+  wait_change_percent: number
+  sla_violations: number
+  patients_completed: number
+}
+
+export interface WhatIfResponse {
+  horizon_minutes: number
+  adjustments: Record<string, Record<string, number>>
+  strategy_override: string | null
+  baseline: Metrics
+  counterfactual: Metrics
+  delta: WhatIfDelta
 }
 
 export interface SimulationState {
@@ -64,6 +81,12 @@ export interface FailureRequest {
 
 export interface StrategyRequest {
   strategy: string
+}
+
+export interface WhatIfRequest {
+  adjustments?: Record<string, Record<string, number>>
+  strategy_override?: Strategy | null
+  horizon_minutes?: number
 }
 
 export interface ComparisonMetric {

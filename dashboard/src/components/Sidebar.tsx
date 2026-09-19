@@ -35,7 +35,7 @@ export function Sidebar({ activeTab, onSelectTab, alertCount = 0 }: SidebarProps
 
   return (
     <aside
-      className={`bg-white border-r border-[#e2e8f0] h-screen sticky top-0 flex flex-col justify-between transition-all duration-300 z-30 ${
+      className={`hidden md:flex flex-col bg-white border-r border-[#e2e8f0] h-screen sticky top-0 justify-between transition-all duration-300 z-30 ${
         collapsed ? 'w-16' : 'w-64'
       }`}
     >

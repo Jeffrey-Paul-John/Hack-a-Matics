@@ -261,8 +261,8 @@ export function ExecutiveOverview({
           </div>
         </div>
 
-        {/* Card 4: Average Wait */}
-        <div className="metric-card">
+        {/* Card 4: Average Wait (Queue Wait only) */}
+        <div className="metric-card" title="Waiting ends when clinical treatment begins; treatment duration is tracked separately.">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               {t('overview.averageWait')}
@@ -275,8 +275,12 @@ export function ExecutiveOverview({
             {metrics.average_wait_minutes.toFixed(1)}m
           </div>
           <div className="flex items-center justify-between mt-3 text-xs">
-            <span className="text-[11px] text-slate-500">{t('overview.targetWait')}</span>
-            <span className="trend-badge neutral">+0.00</span>
+            <span className="text-[11px] text-slate-500" title="Clinical treatment duration (separate from queue wait)">
+              {metrics.average_treatment_minutes != null && metrics.average_treatment_minutes > 0
+                ? `Tx Time: ${metrics.average_treatment_minutes.toFixed(1)}m`
+                : t('overview.targetWait')}
+            </span>
+            <span className="trend-badge success">Queue Wait</span>
           </div>
         </div>
 

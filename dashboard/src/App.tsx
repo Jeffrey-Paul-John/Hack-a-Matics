@@ -29,6 +29,8 @@ import { ScenarioControls } from './components/ScenarioControls'
 import { StrategyComparison } from './components/StrategyComparison'
 import { ValidationPanel } from './components/ValidationPanel'
 import { ChatWidget } from './components/ChatWidget'
+import { WhatIfModal } from './components/WhatIfModal'
+import { MobileBottomNav } from './components/MobileBottomNav'
 import { useTour } from './onboarding/useTour'
 import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
@@ -61,8 +63,13 @@ export default function App() {
   useLiveSocket()
   const live = useSimulationStore(s => s.state)
   const isConnected = useSimulationStore(s => s.isConnected) && !query.isError
+  const connectionStatus = useSimulationStore(s => s.connectionStatus)
+  const notification = useSimulationStore(s => s.notification)
+  const clearNotification = useSimulationStore(s => s.clearNotification)
+  const notify = useSimulationStore(s => s.notify)
   const strategy = useSimulationStore(s => s.strategy)
   const setStrategy = useSimulationStore(s => s.setStrategy)
+  const [isWhatIfOpen, setIsWhatIfOpen] = useState(false)
   const [comparison, setComparison] = useState<ComparisonResult | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [compareError, setCompareError] = useState<string | null>(null)
@@ -102,25 +109,29 @@ export default function App() {
       setCompareError(null)
       const res = await api.compare(force)
       setComparison(res)
+      notify('Monte Carlo evaluation complete (30 replications)', 'success')
     } catch (err: unknown) {
-      setCompareError(err instanceof Error ? err.message : 'Monte Carlo evaluation failed')
+      const msg = err instanceof Error ? err.message : 'Monte Carlo evaluation failed'
+      setCompareError(msg)
+      notify(`Monte Carlo failed: ${msg}`, 'error')
     } finally {
       setIsComparing(false)
     }
   }
 
-  const act = async (work: () => Promise<unknown>) => {
+  const act = async (work: () => Promise<unknown>, actionName = 'Action') => {
     try {
       await work()
       await query.refetch()
-    } catch {
-      /* Handled inside API client */
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Command failed'
+      notify(`${actionName} failed: ${msg}`, 'error')
     }
   }
 
   const switchStrategy = (next: Strategy) => {
     setStrategy(next)
-    void act(() => api.switchStrategy(next))
+    void act(() => api.switchStrategy(next), `Switch to ${next.replace('_', ' ')}`)
   }
 
   const handleExportReport = () => {
@@ -184,27 +195,33 @@ export default function App() {
         <TopBar
           activeTabTitle={activeTabTitle}
           isConnected={isConnected}
+          connectionStatus={connectionStatus}
           alertCount={alertCount}
           onSearch={setSearchTerm}
           onGuideMe={() => {
             const tourKey = activeTab in tourRegistry ? activeTab : 'new-user-dashboard'
             startTour(tourKey as keyof typeof tourRegistry)
           }}
+          onOpenWhatIf={() => setIsWhatIfOpen(true)}
         />
 
-        <main className="flex-1 p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto pb-24 md:pb-8">
           {/* Stale Telemetry Warning Banner */}
           {!isConnected && (
             <div className="mb-6 flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs font-semibold animate-pulse">
               <div className="flex items-center gap-2.5">
                 <WifiOff size={16} />
-                <span>Connection to MedFlow backend interrupted. Telemetry is currently disconnected / stale.</span>
+                <span>
+                  {connectionStatus === 'reconnecting'
+                    ? 'Reconnecting to MedFlow backend engine...'
+                    : 'Connection to MedFlow backend offline. Telemetry is disconnected.'}
+                </span>
               </div>
               <button
                 onClick={() => void query.refetch()}
                 className="text-xs underline hover:text-red-900 font-bold"
               >
-                Reconnect
+                Retry Now
               </button>
             </div>
           )}
@@ -224,8 +241,8 @@ export default function App() {
                   isComparing={isComparing}
                   onCompare={() => void runMonteCarlo(true)}
                   onRefresh={() => void query.refetch()}
-                  onStep={() => void act(api.step)}
-                  onRun={() => void act(() => api.run(60))}
+                  onStep={() => void act(api.step, 'Advance Event')}
+                  onRun={() => void act(() => api.run(60), 'Fast-Forward 60m')}
                   onExportReport={handleExportReport}
                   onSelectWard={() => handleSelectTab('hospital-map')}
                 />
@@ -271,11 +288,13 @@ export default function App() {
                     <ScenarioControls
                       strategy={strategy}
                       resources={state.resources}
-                      onStart={() => void act(() => api.start({ seed: 42, strategy }))}
-                      onStep={() => void act(api.step)}
-                      onRun={() => void act(() => api.run(60))}
+                      onStart={() => void act(() => api.start({ seed: 42, strategy }), 'Start Shift')}
+                      onStep={() => void act(api.step, 'Advance Event')}
+                      onRun={() => void act(() => api.run(60), 'Fast-Forward 60m')}
                       onCompare={() => void runMonteCarlo(true)}
                       onStrategy={switchStrategy}
+                      onOpenWhatIf={() => setIsWhatIfOpen(true)}
+                      onRefresh={() => void query.refetch()}
                     />
                   </div>
                   <ResourceGrid resources={state.resources} />
@@ -530,6 +549,55 @@ export default function App() {
 
       {/* Floating Sentinel Clinical Copilot */}
       <ChatWidget />
+
+      {/* "What If?" Counterfactual Simulation Sandbox Modal */}
+      <WhatIfModal
+        isOpen={isWhatIfOpen}
+        onClose={() => setIsWhatIfOpen(false)}
+        currentStrategy={strategy}
+      />
+
+      {/* Ergonomic Mobile Bottom Navigation for Phones */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        onOpenWhatIf={() => setIsWhatIfOpen(true)}
+        alertCount={alertCount}
+      />
+
+      {/* Global Action Failure / Success Toast Alert */}
+      {notification && (
+        <div
+          className={`fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 max-w-sm px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3 text-xs font-semibold animate-fadeIn border transition-all ${
+            notification.type === 'error'
+              ? 'bg-rose-950 text-rose-100 border-rose-800'
+              : notification.type === 'success'
+              ? 'bg-slate-900 text-emerald-400 border-slate-800'
+              : 'bg-slate-900 text-white border-slate-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                notification.type === 'error'
+                  ? 'bg-rose-500'
+                  : notification.type === 'success'
+                  ? 'bg-emerald-400'
+                  : 'bg-blue-400'
+              }`}
+            />
+            <span>{notification.message}</span>
+          </div>
+          <button
+            onClick={clearNotification}
+            className="p-1 text-slate-400 hover:text-white cursor-pointer"
+            title="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   )
 }
+

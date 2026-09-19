@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:build": "npm run build && npx cap sync",
+    "cap:sync": "npx cap sync"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.66.0",
@@ -20,6 +22,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
