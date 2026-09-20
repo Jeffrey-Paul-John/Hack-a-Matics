@@ -13,3 +13,16 @@ async def test_websocket_disconnect_handled_gracefully():
     mock_sock = MockSocket()
     await live(mock_sock)
     assert mock_sock not in sockets.clients
+
+def test_health_check_endpoint():
+    from fastapi.testclient import TestClient
+    from medflow.api.main import app
+
+    client = TestClient(app)
+    res = client.get("/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "healthy"
+    assert data["service"] == "pulsegrid-api"
+    assert "timestamp" in data
+

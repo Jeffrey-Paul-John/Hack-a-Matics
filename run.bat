@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title PulseGrid - Clinical Operations & Intelligence Simulator
+title PulseGrid - Clinical Operations and Intelligence Simulator
 color 0B
 
 echo ============================================================
-echo   PulseGrid - Clinical Operations & Intelligence Simulator
+echo   PulseGrid - Clinical Operations and Intelligence Simulator
 echo   Launching backend API + React dashboard
 echo ============================================================
 echo.

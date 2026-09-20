@@ -16,8 +16,8 @@ export function PageCurtainProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
   const prefersReduced = useReducedMotion()
 
-  // If reduced motion is on, start idle; otherwise initial phase is 'out' (sweep off on load)
-  const [phase, setPhase] = useState<Phase>(prefersReduced ? 'idle' : 'out')
+  // Initial phase is always 'idle' so the app renders immediately without a white screen overlay
+  const [phase, setPhase] = useState<Phase>('idle')
   const [entryFrom, setEntryFrom] = useState<string>('0vw')
 
   const recordedPathRef = useRef<string>(location.pathname)
@@ -40,6 +40,15 @@ export function PageCurtainProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => {
       setPhase('covered')
     }, SWEEP_IN_S * 1000 + 400)
+    return () => clearTimeout(timer)
+  }, [phase])
+
+  // Effect while 'out': fallback timeout if onAnimationComplete dropped
+  useEffect(() => {
+    if (phase !== 'out') return
+    const timer = setTimeout(() => {
+      setPhase('idle')
+    }, SWEEP_OUT_S * 1000 + 300)
     return () => clearTimeout(timer)
   }, [phase])
 

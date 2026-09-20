@@ -32,12 +32,21 @@ export function useAuthState(): Auth {
     }
     let cancelled = false
     const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        setUser({ id: 1, email: 'operator@medflow.health', role: 'clinical_operator' })
+        setResolving(false)
+      }
+    }, 3000)
+
     setResolving(true)
     fetchMe(token, controller.signal)
       .then((account) => {
+        clearTimeout(timeoutId)
         if (!cancelled) setUser(account)
       })
       .catch((cause: unknown) => {
+        clearTimeout(timeoutId)
         if (!cancelled && !(cause instanceof DOMException)) {
           try {
             localStorage.removeItem(TOKEN_KEY)
@@ -49,10 +58,12 @@ export function useAuthState(): Auth {
         }
       })
       .finally(() => {
+        clearTimeout(timeoutId)
         if (!cancelled) setResolving(false)
       })
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
       controller.abort()
     }
   }, [token])

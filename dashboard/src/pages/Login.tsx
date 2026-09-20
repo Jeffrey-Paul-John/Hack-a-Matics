@@ -249,8 +249,26 @@ export default function LoginPage() {
           </h1>
 
           <p className="gate__hint" aria-hidden="true">
-            click to sign in
+            Clinical Operations &amp; Intelligence Simulator
           </p>
+
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-sm cursor-pointer"
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={useDemo}
+              disabled={busy !== null}
+              className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 transition-all shadow-sm cursor-pointer"
+            >
+              {busy === 'demo' ? 'Signing in…' : 'Enter Demo Shift →'}
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>
