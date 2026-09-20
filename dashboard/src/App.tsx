@@ -87,6 +87,7 @@ function Dashboard() {
   const [isComparing, setIsComparing] = useState(false)
   const [compareError, setCompareError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const { startTour, checkTourSeen } = useTour()
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -234,8 +235,6 @@ function Dashboard() {
       </main>
     )
   }
-
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
 
   const alertCount = state.metrics.sla_violations
 
