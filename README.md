@@ -2,6 +2,10 @@
 
 MedFlow is a high-fidelity, deterministic, event-driven hospital resource management simulator and real-time clinical command desk. It orchestrates patient journeys from emergency arrival and multi-factor triage prioritization through atomic resource allocation, clinical treatment, discharge, and live analytical telemetry.
 
+<p align="center">
+  <img src="docs/assets/medflow-overview.png" alt="MedFlow - Real-World Decision Copilot Overview" width="100%" />
+</p>
+
 ```
        [ Poisson Arrival Generator ]
                      │
