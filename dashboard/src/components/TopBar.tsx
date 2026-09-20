@@ -1,4 +1,4 @@
-import { Bell, Compass, Globe, LogOut, Search, Sparkles, UserCheck, RefreshCw } from 'lucide-react'
+import { Bell, Compass, Globe, LogOut, Menu, Search, Sparkles, UserCheck, RefreshCw } from 'lucide-react'
 import { SUPPORTED_LANGUAGES, useLanguageStore, useTranslation, type SupportedLanguage } from '../onboarding/i18n'
 import type { ConnectionStatus } from '../store/simulationStore'
 import { useAuth } from '../session'
@@ -13,6 +13,7 @@ interface TopBarProps {
   onGuideMe?: () => void
   onOpenWhatIf?: () => void
   showGlobalWhatIf?: boolean
+  onOpenMobileMenu?: () => void
 }
 
 export function TopBar({
@@ -24,6 +25,7 @@ export function TopBar({
   onGuideMe,
   onOpenWhatIf,
   showGlobalWhatIf = false,
+  onOpenMobileMenu,
 }: TopBarProps) {
   const { language, setLanguage } = useLanguageStore()
   const { t } = useTranslation()
@@ -41,11 +43,23 @@ export function TopBar({
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 sticky top-0 z-30">
-      {/* Breadcrumb Section with data-tour */}
-      <div data-tour="breadcrumb-nav" className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-        <span className="text-slate-400">PulseGrid</span>
-        <span className="text-slate-300">/</span>
-        <span className="text-slate-900 font-bold capitalize">{activeTabTitle}</span>
+      {/* Breadcrumb Section with data-tour and Mobile Drawer Trigger */}
+      <div className="flex items-center gap-2.5">
+        {onOpenMobileMenu && (
+          <button
+            onClick={onOpenMobileMenu}
+            className="md:hidden p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
+            title="Open navigation menu"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={20} />
+          </button>
+        )}
+        <div data-tour="breadcrumb-nav" className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <span className="text-slate-400">PulseGrid</span>
+          <span className="text-slate-300">/</span>
+          <span className="text-slate-900 font-bold capitalize">{activeTabTitle}</span>
+        </div>
       </div>
 
       {/* Global Search Bar with data-tour */}

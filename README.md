@@ -253,3 +253,54 @@ DEFAULT_VOICE=shubh
 1. In `src/medflow/services/tts_service.py`, add the new speaker ID to `ALLOWED_VOICES` (e.g. `ALLOWED_VOICES = {"shubh", "simran", "new_speaker"}`).
 2. In `src/medflow/api/tts_router.py`, add the voice descriptor to the `GET /tts/config` payload.
 3. The frontend dynamically discovers available voices from `/tts/config` and renders them in the voice selector.
+
+---
+
+## Running on Android
+
+MedFlow includes a Capacitor wrapper configured for Android (`com.medflow.app`), allowing you to test clinical surveillance and telemetry natively on Android phones and emulators.
+
+### Prerequisites
+- **Android Studio** (Hedgehog or newer) with Android SDK and platform tools.
+- **Java Development Kit (JDK 17+)**.
+- **Node.js 18+** & **Python 3.11+**.
+
+### 1. Build and Sync
+Inside the `dashboard/` directory:
+```bash
+cd dashboard
+npm run cap:sync      # Compiles TypeScript/Vite bundle and copies assets into android/
+npm run cap:android   # Syncs assets and launches Android Studio
+```
+
+### 2. Testing with Android Emulator (10.0.2.2)
+The standard Android Virtual Device (AVD) emulator accesses the host computer's localhost via the special virtual loopback IP `10.0.2.2`.
+1. Copy or link `.env.android` to `.env` in `dashboard/`:
+   ```bash
+   VITE_API_URL=http://10.0.2.2:8000
+   ```
+2. Start the backend bound to all network interfaces:
+   ```bash
+   python -m uvicorn medflow.api.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+3. In Android Studio, select your emulator and click **Run ▶**.
+
+### 3. Testing on a Physical Android Device (LAN Wi-Fi)
+1. Find your computer's local IP address:
+   - Windows: Run `ipconfig` (e.g., `192.168.0.110`)
+   - macOS/Linux: Run `ifconfig` or `ip a`
+2. Set `VITE_API_URL` to your LAN IP in `dashboard/.env`:
+   ```bash
+   VITE_API_URL=http://192.168.0.110:8000
+   ```
+3. Run `npm run cap:sync` inside `dashboard/`.
+4. **Firewall & Binding**:
+   - Ensure `run.bat` or `uvicorn` is started with `--host 0.0.0.0` (not `127.0.0.1`).
+   - If Windows Defender Firewall blocks incoming connections on port `8000`, add an inbound rule or allow Python when prompted.
+5. Connect your Android phone to the **same Wi-Fi network**, enable **USB Debugging** in Developer Options, and deploy from Android Studio.
+
+### 4. Security & Privacy
+- **Zero Frontend Secrets**: API keys (such as `SARVAM_API_KEY`) and server secrets are strictly confined to the backend Python environment (`.env`). They are never bundled or exposed in the client-side JavaScript bundle.
+- **Cleartext Policy**: `capacitor.config.ts` enforces `cleartext: true` strictly in development (`CAPACITOR_ENV !== 'production'`); production builds mandate secure HTTPS/WSS endpoints.
+- **Persistent Offline Storage**: User sessions (`medflow_session_id`) and voice preferences (`medflow_tts_voice`, `medflow_tts_autoplay`) are safely persisted across app reboots via WebView `localStorage`.
+

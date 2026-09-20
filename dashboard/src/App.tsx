@@ -200,7 +200,7 @@ function Dashboard() {
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             {query.error
-              ? 'Start the FastAPI backend at 127.0.0.1:8000 to connect this surveillance desk.'
+              ? `Start the FastAPI backend at ${api.base} to connect this surveillance desk.`
               : 'Establishing live connection to clinical simulation engine…'}
           </p>
           <button
@@ -214,6 +214,8 @@ function Dashboard() {
     )
   }
 
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+
   const alertCount = state.metrics.sla_violations
 
   return (
@@ -223,6 +225,8 @@ function Dashboard() {
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
         alertCount={alertCount}
+        mobileOpen={mobileDrawerOpen}
+        onCloseMobile={() => setMobileDrawerOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -233,6 +237,7 @@ function Dashboard() {
           connectionStatus={connectionStatus}
           alertCount={alertCount}
           onSearch={setSearchTerm}
+          onOpenMobileMenu={() => setMobileDrawerOpen(true)}
           onGuideMe={() => {
             const tourKey = activeTab in tourRegistry ? activeTab : 'new-user-dashboard'
             startTour(tourKey as keyof typeof tourRegistry)

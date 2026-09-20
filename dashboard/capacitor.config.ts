@@ -1,13 +1,15 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
+const isDev = process.env.NODE_ENV !== 'production' && process.env.CAPACITOR_ENV !== 'production'
+const allowCleartext = process.env.CAPACITOR_CLEARTEXT === 'true' || (isDev && process.env.CAPACITOR_CLEARTEXT !== 'false')
+
 const config: CapacitorConfig = {
-  appId: 'com.pulsegrid.app',
-  appName: 'PulseGrid',
+  appId: 'com.medflow.app',
+  appName: 'MedFlow',
   webDir: 'dist',
   server: {
-    url: 'http://192.168.0.110:5173',
-    cleartext: true,
     androidScheme: 'https',
+    cleartext: allowCleartext,
   },
 }
 

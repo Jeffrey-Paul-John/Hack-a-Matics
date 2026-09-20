@@ -29,7 +29,7 @@ export function useLiveSocket() {
       if (isUnmountingRef.current) return
 
       const sessionId = api.getSessionId()
-      const wsUrl = `${api.base.replace(/^http/, 'ws')}/ws/live?session_id=${encodeURIComponent(sessionId)}`
+      const wsUrl = `${api.getWsUrl('/ws/live')}?session_id=${encodeURIComponent(sessionId)}`
 
       if (retryCountRef.current > 0) {
         setConnectionStatus('reconnecting')

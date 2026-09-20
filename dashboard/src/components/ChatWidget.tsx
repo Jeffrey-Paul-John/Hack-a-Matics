@@ -156,10 +156,10 @@ export function ChatWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
+    <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end max-w-[calc(100vw-2rem)]">
       {/* Floating Chat Modal */}
       {isOpen && (
-        <div className="mb-3 w-96 sm:w-[460px] max-h-[90vh] bg-white border border-slate-200 rounded-2xl shadow-float overflow-hidden flex flex-col transition-all animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[460px] max-w-[460px] max-h-[78vh] sm:max-h-[85vh] bg-white border border-slate-200 rounded-2xl shadow-float overflow-hidden flex flex-col transition-all animate-in fade-in slide-in-from-bottom-4 duration-200">
           {/* Header matching dark aesthetics */}
           <div className="bg-slate-900 text-white p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -319,7 +319,7 @@ export function ChatWidget() {
           </div>
 
           {/* Messages Container */}
-          <div className="h-[360px] sm:h-[400px] overflow-y-auto p-4 flex flex-col gap-3 bg-slate-50/50 scroll-smooth">
+          <div className="h-[280px] sm:h-[400px] max-h-[48vh] sm:max-h-[55vh] overflow-y-auto p-3.5 sm:p-4 flex flex-col gap-3 bg-slate-50/50 scroll-smooth">
             {messages.map((msg) => {
               const msgState = getMessageState(msg.id)
               return (

@@ -40,11 +40,25 @@ from ..math.validation import benchmarks, run_validation_suite
 from .tts_router import router as tts_router, store_chat_reply
 from ..db import dispatch_supabase_sync, check_supabase_health
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://localhost",
+    "http://localhost",
+    "capacitor://localhost",
+]
+
+env_cors = os.getenv("CORS_ORIGINS")
+if env_cors:
+    allowed_origins = [o.strip() for o in env_cors.split(",") if o.strip()]
+else:
+    allowed_origins = DEFAULT_CORS_ORIGINS
+
 app = FastAPI(title="PulseGrid API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_origin_regex=r".*",
+    allow_origins=allowed_origins,
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX", r".*"),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
