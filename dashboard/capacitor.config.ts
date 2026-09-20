@@ -5,8 +5,9 @@ const config: CapacitorConfig = {
   appName: 'PulseGrid',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    url: 'http://192.168.0.110:5173',
     cleartext: true,
+    androidScheme: 'https',
   },
 }
 
