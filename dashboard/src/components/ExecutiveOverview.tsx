@@ -138,9 +138,10 @@ export function ExecutiveOverview({
       index: Math.max(0, Number((baseWait + variance).toFixed(1))),
     }
     departmentNames.forEach((dept, dIdx) => {
+      const load = wardSnapshotData[dIdx]?.loadPercent ?? 0
       item[dept] = Math.max(
         0,
-        Math.min(100, wardSnapshotData[dIdx]?.loadPercent + Math.cos(i + dIdx) * 3)
+        Math.min(100, Math.round(load + Math.cos(i + dIdx) * 3))
       )
     })
     return item

@@ -41,7 +41,6 @@ import { generateAuditZip } from './utils/auditExport'
 import { useTour } from './onboarding/useTour'
 import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
-import { PageTransition } from './PageTransition'
 import { useDuplicateControlsCheck } from './hooks/useDuplicateControlsCheck'
 import LoginPage, { SessionSplash } from './pages/Login'
 import { sessionPhase, useAuth } from './session'
@@ -284,9 +283,6 @@ function Dashboard() {
               </button>
             </div>
           )}
-
-          {/* Fast slanted route wipe transition */}
-          <PageTransition />
 
           <Routes>
             {/* ROUTE 1: EXECUTIVE OVERVIEW */}
