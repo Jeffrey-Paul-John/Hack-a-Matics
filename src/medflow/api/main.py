@@ -68,6 +68,19 @@ app.add_middleware(
 )
 app.include_router(tts_router)
 
+@app.get("/")
+def root():
+    """Root endpoint welcoming visitors and directing to interactive documentation."""
+    return {
+        "service": "PulseGrid Clinical Operations & Intelligence Engine",
+        "status": "online",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+        "websocket": "/ws/live",
+    }
+
+
 @app.get("/health")
 def health_check():
     """Fast, lightweight health check endpoint for container orchestrators, Render, and cold-start wakeups."""
