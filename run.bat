@@ -1,10 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
-title MedFlow - Hospital Resource Management Simulator
+title PulseGrid - Clinical Operations & Intelligence Simulator
 color 0B
 
 echo ============================================================
-echo   MedFlow - Hospital Resource Management Simulator
+echo   PulseGrid - Clinical Operations & Intelligence Simulator
 echo   Launching backend API + React dashboard
 echo ============================================================
 echo.
@@ -55,20 +55,20 @@ if not exist "dashboard\node_modules\" (
 
 REM --- Launch backend ---------------------------------------------
 echo [RUN] Starting backend API on http://127.0.0.1:8000 ...
-start "MedFlow API" cmd /k "call venv\Scripts\activate.bat && set PYTHONPATH=src && python -m uvicorn medflow.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload"
+start "PulseGrid API" cmd /k "call venv\Scripts\activate.bat && set PYTHONPATH=src && python -m uvicorn medflow.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --reload"
 
 timeout /t 4 /nobreak >nul
 
 REM --- Launch frontend ----------------------------------------------
 echo [RUN] Starting dashboard on http://localhost:5173 ...
-start "MedFlow Dashboard" cmd /k "cd dashboard && npm run dev"
+start "PulseGrid Dashboard" cmd /k "cd dashboard && npm run dev"
 
 echo.
 echo ============================================================
-echo   MedFlow is starting up in two new windows:
+echo   PulseGrid is starting up in two new windows:
 echo     - API        : http://127.0.0.1:8000/docs
 echo     - Dashboard  : http://localhost:5173
-echo   Close those windows (or Ctrl+C inside them) to stop MedFlow.
+echo   Close those windows (or Ctrl+C inside them) to stop PulseGrid.
 echo ============================================================
 echo.
 pause
