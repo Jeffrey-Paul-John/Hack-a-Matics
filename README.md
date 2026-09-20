@@ -428,4 +428,12 @@ Once deployed, verify the complete live workflow:
 - [ ] **TTS Graceful Fallback**: If voice is unconfigured, verify TTS voice toggle remains cleanly disabled without failing chat queries.
 - [ ] **Deep Route Refresh**: Refresh your browser on `https://<frontend-url>/simulation-lab` — page loads seamlessly without a 404 error.
 
+---
+
+## Credits & Acknowledgments
+
+- **Hack-a-Matics Team**: Core concept, system architecture, clinical workflows, and mathematical modeling.
+- **Claude (Anthropic)**: AI pair programmer and co-pilot — acknowledged for assistance with feature tweaking, full-stack debugging, UI polish, and cross-platform integrations.
+
+
 
