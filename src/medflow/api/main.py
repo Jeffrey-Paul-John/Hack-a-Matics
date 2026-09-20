@@ -54,16 +54,29 @@ if env_cors:
 else:
     allowed_origins = DEFAULT_CORS_ORIGINS
 
+# Optional regex for Vercel preview URLs (e.g. https:\/\/.*\.vercel\.app), off by default
+cors_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
+
 app = FastAPI(title="PulseGrid API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX", r".*"),
+    allow_origin_regex=cors_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(tts_router)
+
+@app.get("/health")
+def health_check():
+    """Fast, lightweight health check endpoint for container orchestrators, Render, and cold-start wakeups."""
+    return {
+        "status": "healthy",
+        "service": "pulsegrid-api",
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 # Operator accounts registry for authentication
 OPERATOR_ACCOUNTS = {

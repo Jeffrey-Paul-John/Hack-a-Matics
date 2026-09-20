@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: medflow-backend
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHONPATH
+        value: src
+      - key: CORS_ORIGINS
+        value: https://localhost,http://localhost,capacitor://localhost,http://localhost:5173,http://127.0.0.1:5173
+      - key: CORS_ORIGIN_REGEX
+        value: ""
+      - key: NUM_PROXIES
+        value: "1"
+      - key: VOICE_ENABLED
+        value: "false"
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import logging
+import os
 import time
 import uuid
 from typing import Optional
@@ -147,10 +148,19 @@ async def speak(body: SpeakRequest, request: Request):
             }
         )
 
-    # 5. Extract client IP
+    # 5. Extract client IP respecting configured proxy hops
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        try:
+            num_proxies = max(1, int(os.getenv("NUM_PROXIES", "1")))
+        except ValueError:
+            num_proxies = 1
+        # Trust only the configured proxy hops looking backward from right
+        if len(parts) >= num_proxies:
+            client_ip = parts[-num_proxies]
+        else:
+            client_ip = parts[0]
     elif request.client and request.client.host:
         client_ip = request.client.host
     else:

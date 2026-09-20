@@ -44,9 +44,19 @@ export function useLiveSocket() {
             socket.close()
             return
           }
+          const wasReconnecting = retryCountRef.current > 0
           retryCountRef.current = 0
           setConnectionStatus('connected')
           socket.send('subscribe')
+
+          // If reconnecting after a network drop, immediately refetch state via REST
+          if (wasReconnecting) {
+            api.state()
+              .then(state => {
+                setState(state)
+              })
+              .catch(() => {})
+          }
 
           // Start ping heartbeat every 15 seconds
           if (pingIntervalRef.current) clearInterval(pingIntervalRef.current)
@@ -78,7 +88,8 @@ export function useLiveSocket() {
 
           setConnectionStatus('reconnecting')
           retryCountRef.current += 1
-          const delay = Math.min(1000 * Math.pow(1.5, retryCountRef.current), 10000)
+          // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s
+          const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 30000)
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect()
@@ -86,11 +97,12 @@ export function useLiveSocket() {
         }
 
         socket.onerror = () => {
-          setConnectionStatus('disconnected')
+          setConnectionStatus('reconnecting')
         }
       } catch {
-        setConnectionStatus('disconnected')
-        const delay = Math.min(1000 * Math.pow(1.5, retryCountRef.current), 10000)
+        setConnectionStatus('reconnecting')
+        retryCountRef.current += 1
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current - 1), 30000)
         reconnectTimeoutRef.current = setTimeout(() => {
           connect()
         }, delay)
