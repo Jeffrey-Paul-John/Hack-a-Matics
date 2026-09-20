@@ -54,8 +54,8 @@ if env_cors:
 else:
     allowed_origins = DEFAULT_CORS_ORIGINS
 
-# Optional regex for Vercel preview URLs (e.g. https:\/\/.*\.vercel\.app), off by default
-cors_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip() or None
+# Regex for Vercel preview & production deployments (allows any *.vercel.app domain by default)
+cors_regex = os.getenv("CORS_ORIGIN_REGEX", r"https://.*\.vercel\.app").strip() or r"https://.*\.vercel\.app"
 
 app = FastAPI(title="PulseGrid API", version="1.0.0")
 app.add_middleware(
