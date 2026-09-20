@@ -1,0 +1,8 @@
+{
+  "name": "pulsegrid-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix dashboard run build",
+    "install:dashboard": "npm --prefix dashboard install"
+  }
+}
