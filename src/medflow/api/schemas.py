@@ -34,3 +34,22 @@ class ExperimentRequest(BaseModel):
         default_factory=lambda: ["fifo", "random", "static_priority", "wait_aware", "mdp_optimal"]
     )
     baseline_policy: str = "fifo"
+ 
+class UserLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UserRegisterRequest(BaseModel):
+    email: str
+    password: str
+    role: str = "operator"
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 86400
+
+class UserResponse(BaseModel):
+    id: int = 1
+    email: str
+    role: str = "operator"

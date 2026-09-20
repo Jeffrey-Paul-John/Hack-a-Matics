@@ -27,6 +27,10 @@ from .schemas import (
     StrategyRequest,
     SurgeRequest,
     WhatIfRequest,
+    TokenResponse,
+    UserLoginRequest,
+    UserRegisterRequest,
+    UserResponse,
 )
 from .chat_service import answer_clinical_query, detect_input_language
 from .session_manager import SessionManager
@@ -34,8 +38,9 @@ from .websocket_manager import ConnectionManager
 from ..math.monte_carlo import aggregate, run_replications
 from ..math.validation import benchmarks, run_validation_suite
 from .tts_router import router as tts_router, store_chat_reply
+from ..db import dispatch_supabase_sync, check_supabase_health
 
-app = FastAPI(title="MedFlow API", version="1.0.0")
+app = FastAPI(title="PulseGrid API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -45,6 +50,60 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(tts_router)
+
+# Operator accounts registry for authentication
+OPERATOR_ACCOUNTS = {
+    "admin@medflow.health": "medflow-demo",
+    "admin@pulsegrid.dev": "pulsegrid-demo",
+}
+
+@app.post("/v1/auth/login", response_model=TokenResponse)
+async def auth_login(payload: UserLoginRequest):
+    email = payload.email.strip().lower()
+    expected = OPERATOR_ACCOUNTS.get(email)
+    if expected is not None:
+        if payload.password != expected:
+            raise HTTPException(status_code=401, detail="invalid email or password")
+    elif len(payload.password) < 8:
+        raise HTTPException(status_code=401, detail="invalid email or password")
+    else:
+        OPERATOR_ACCOUNTS[email] = payload.password
+
+    import base64, json
+    token_str = base64.b64encode(json.dumps({"email": email, "role": "clinical_operator"}).encode()).decode()
+    return TokenResponse(access_token=f"medflow_jwt_{token_str}")
+
+
+@app.post("/v1/auth/register", response_model=UserResponse)
+async def auth_register(payload: UserRegisterRequest):
+    email = payload.email.strip().lower()
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if email in OPERATOR_ACCOUNTS:
+        raise HTTPException(status_code=409, detail="email already registered")
+    OPERATOR_ACCOUNTS[email] = payload.password
+    return UserResponse(id=len(OPERATOR_ACCOUNTS), email=email, role=payload.role)
+
+
+@app.get("/v1/auth/me", response_model=UserResponse)
+async def auth_me(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication token")
+
+    email = "admin@medflow.health"
+    role = "clinical_operator"
+    if token.startswith("medflow_jwt_"):
+        try:
+            import base64, json
+            decoded = json.loads(base64.b64decode(token.replace("medflow_jwt_", "")).decode())
+            email = decoded.get("email", email)
+            role = decoded.get("role", role)
+        except Exception:
+            pass
+    return UserResponse(id=1, email=email, role=role)
+
 
 config = load_config()
 sessions = SessionManager(lambda: load_config())
@@ -91,6 +150,7 @@ async def start(body: StartRequest = StartRequest(), request: Request = None):
     new_engine = sessions.reset_session(session_id, body.seed, body.strategy)
     state = new_engine.state()
     await sockets.broadcast(state, session_id)
+    dispatch_supabase_sync(session_id, new_engine)
     return state
 
 
@@ -100,6 +160,7 @@ async def step(request: Request = None):
     engine_inst = current(request)
     state = engine_inst.step()
     await sockets.broadcast(state, session_id)
+    dispatch_supabase_sync(session_id, engine_inst)
     return state
 
 
@@ -109,7 +170,14 @@ async def run(body: RunRequest, request: Request = None):
     engine_inst = current(request)
     state = engine_inst.run(body.duration)
     await sockets.broadcast(state, session_id)
+    dispatch_supabase_sync(session_id, engine_inst)
     return state
+
+
+@app.get("/v1/supabase/health")
+def supabase_health():
+    """Diagnostic check for live Supabase cloud connectivity."""
+    return check_supabase_health()
 
 
 @app.post("/simulation/reset")

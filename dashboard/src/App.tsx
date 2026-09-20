@@ -43,6 +43,9 @@ import { tourRegistry } from './onboarding/tourSteps'
 import { useTranslation } from './onboarding/i18n'
 import { PageTransition } from './PageTransition'
 import { useDuplicateControlsCheck } from './hooks/useDuplicateControlsCheck'
+import LoginPage, { SessionSplash } from './pages/Login'
+import { sessionPhase, useAuth } from './session'
+import { usePageCurtain } from './curtain'
 
 const VALID_TABS: TabKey[] = [
   'overview',
@@ -66,7 +69,7 @@ const TAB_TITLE_KEYS: Record<TabKey, string> = {
   settings: 'nav.settings',
 }
 
-export default function App() {
+function Dashboard() {
   const query = useSimulationState()
   useLiveSocket()
   // Dev-only: warn in the console if two visible controls share the same label.
@@ -190,10 +193,10 @@ export default function App() {
       <main className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
         <div className="bg-white border border-[#e2e8f0] rounded-2xl p-8 max-w-md w-full text-center shadow-float">
           <div className="mx-auto w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center mb-4 font-bold text-sm">
-            MF
+            PG
           </div>
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            MedFlow · Clinical Intelligence Desk
+            PulseGrid · Clinical Intelligence Desk
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             {query.error
@@ -244,8 +247,8 @@ export default function App() {
                 <WifiOff size={16} />
                 <span>
                   {connectionStatus === 'reconnecting'
-                    ? 'Reconnecting to MedFlow backend engine...'
-                    : 'Connection to MedFlow backend offline. Telemetry is disconnected.'}
+                    ? 'Reconnecting to PulseGrid backend engine...'
+                    : 'Connection to PulseGrid backend offline. Telemetry is disconnected.'}
                 </span>
               </div>
               <button
@@ -482,7 +485,7 @@ export default function App() {
                         {t('pages.guide.mathValidation')}
                       </h2>
                       <p className="text-xs text-slate-600 leading-relaxed">
-                        MedFlow separates theoretical validation from simulation execution:
+                        PulseGrid separates theoretical validation from simulation execution:
                       </p>
                       <ul className="text-xs text-slate-600 mt-2 space-y-1.5 list-disc pl-4">
                         <li>Erlang-C predicts queuing delay probability for stable load.</li>
@@ -501,7 +504,7 @@ export default function App() {
                       </h2>
                     </div>
                     <p className="text-xs text-slate-500 mb-4">
-                      Launch an interactive spotlight walkthrough for any section of MedFlow:
+                      Launch an interactive spotlight walkthrough for any section of PulseGrid:
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {[
@@ -566,15 +569,55 @@ export default function App() {
                           {isConnected ? t('pages.settings.online') : t('pages.settings.offline')}
                         </span>
                       </div>
-                      <div className="flex justify-between py-2">
+                      <div className="flex justify-between py-2 border-b border-slate-100">
                         <span className="text-slate-500">{t('pages.settings.configSource')}</span>
                         <span className="font-mono text-slate-700">config/config.yaml</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Supabase & AI Intelligence Services Card */}
+                  <div className="sentinel-card">
+                    <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center justify-between">
+                      <span>Cloud Infrastructure & AI Services</span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Supabase Live
+                      </span>
+                    </h2>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">Supabase Cloud Database</span>
+                        <span className="font-mono font-bold text-slate-900 truncate max-w-[260px]">
+                          https://zditonamkiltynteyodf.supabase.co
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">Synchronized Tables</span>
+                        <span className="font-mono text-xs text-slate-700">
+                          sessions, snapshots, patients, resources
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-100">
+                        <span className="text-slate-500">LLM Inference Engine</span>
+                        <span className="font-mono font-bold text-indigo-600">
+                          Groq (llama-3.3-70b-versatile)
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-2">
+                        <span className="text-slate-500">Voice Synthesis (TTS)</span>
+                        <span className="font-mono font-bold text-emerald-600">
+                          Sarvam AI Multilingual Audio
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
               }
             />
+
+            {/* Login redirect if already authenticated */}
+            <Route path="/login" element={<Navigate to="/" replace />} />
 
             {/* FALLBACK ROUTE */}
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -635,5 +678,27 @@ export default function App() {
       )}
     </div>
   )
+}
+
+/**
+ * Root App component acting as the session gate.
+ *
+ * Directs unauthenticated visitors to LoginPage, displays SessionSplash during
+ * token resolution, and unlocks the full clinical Dashboard once authenticated.
+ */
+export default function App() {
+  const auth = useAuth()
+  const phase = sessionPhase(auth)
+  const { blocking } = usePageCurtain()
+
+  if (phase === 'pending') {
+    return <SessionSplash />
+  }
+
+  if (phase === 'out' || (phase === 'in' && blocking)) {
+    return <LoginPage />
+  }
+
+  return <Dashboard />
 }
 

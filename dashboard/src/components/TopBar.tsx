@@ -1,6 +1,8 @@
 import { Bell, Compass, Globe, LogOut, Search, Sparkles, UserCheck, RefreshCw } from 'lucide-react'
 import { SUPPORTED_LANGUAGES, useLanguageStore, useTranslation, type SupportedLanguage } from '../onboarding/i18n'
 import type { ConnectionStatus } from '../store/simulationStore'
+import { useAuth } from '../session'
+import { usePageCurtain } from '../curtain'
 
 interface TopBarProps {
   activeTabTitle: string
@@ -25,15 +27,23 @@ export function TopBar({
 }: TopBarProps) {
   const { language, setLanguage } = useLanguageStore()
   const { t } = useTranslation()
+  const auth = useAuth()
+  const curtain = usePageCurtain()
 
   const isReconnecting = connectionStatus === 'reconnecting'
   const isOffline = connectionStatus === 'disconnected' || !isConnected
+
+  const handleSignOut = () => {
+    curtain.cover(() => {
+      auth.signOut()
+    })
+  }
 
   return (
     <header className="h-16 bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 sticky top-0 z-30">
       {/* Breadcrumb Section with data-tour */}
       <div data-tour="breadcrumb-nav" className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-        <span className="text-slate-400">MedFlow</span>
+        <span className="text-slate-400">PulseGrid</span>
         <span className="text-slate-300">/</span>
         <span className="text-slate-900 font-bold capitalize">{activeTabTitle}</span>
       </div>
@@ -143,15 +153,21 @@ export function TopBar({
             <UserCheck size={14} />
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-[11px] font-bold text-slate-900 leading-tight">{t('topbar.clinicalStaff')}</span>
-            <span className="text-[9px] font-mono text-slate-400">{t('topbar.surveillance')}</span>
+            <span className="text-[11px] font-bold text-slate-900 leading-tight">
+              {auth.user?.email || t('topbar.clinicalStaff')}
+            </span>
+            <span className="text-[9px] font-mono text-slate-400">
+              {auth.user?.role ? auth.user.role.replace('_', ' ') : t('topbar.surveillance')}
+            </span>
           </div>
         </div>
 
         {/* Exit Icon */}
         <button
+          onClick={handleSignOut}
           className="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-          title="Sign out / reset workspace"
+          title="Sign out of PulseGrid"
+          aria-label="Sign out"
         >
           <LogOut size={16} />
         </button>

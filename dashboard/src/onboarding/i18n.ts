@@ -53,7 +53,7 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     'onboarding.transmissionTrend.description': 'Time-series transmission curve illustrating dynamic queueing delay pressure throughout the shift.',
     'onboarding.wardCapacity.title': 'Ward Capacity & 85% Safety Guide',
     'onboarding.wardCapacity.description': 'Real-time bed utilization breakdown highlighting clinical units approaching saturation threshold.',
-    'onboarding.clinicalCopilot.title': 'MedFlow Clinical AI Copilot',
+    'onboarding.clinicalCopilot.title': 'PulseGrid Clinical AI Copilot',
     'onboarding.clinicalCopilot.description': 'Ask natural language queries in any language about live queue delays, doctor availability, and triage policies.',
 
     // Hospital Map Onboarding
@@ -167,7 +167,7 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     'pages.reports.title': 'Validation & Clinical Audit Reports',
     'pages.reports.desc': "Theoretical Erlang-C/B benchmarks, Little's Law sanity check, and export tools.",
     'pages.reports.downloadJson': 'Download Telemetry JSON',
-    'pages.guide.title': 'MedFlow Clinical Guide & System Architecture',
+    'pages.guide.title': 'PulseGrid Clinical Guide & System Architecture',
     'pages.guide.desc': 'Operational policies, mathematical formulations, and triage mechanics.',
     'pages.guide.triagePolicies': 'Triage Policies',
     'pages.guide.mathValidation': 'Mathematical Validation',
@@ -182,9 +182,9 @@ export const translations: Record<SupportedLanguage, Record<string, string>> = {
     'pages.settings.configSource': 'Config Source',
 
     // Copilot
-    'chat.title': 'MedFlow Clinical Copilot',
+    'chat.title': 'PulseGrid Clinical Copilot',
     'chat.subtitle': 'Live Operations & Triage',
-    'chat.placeholder': 'Ask MedFlow copilot in any language...',
+    'chat.placeholder': 'Ask PulseGrid copilot in any language...',
     'chat.send': 'Send',
   },
   hi: {

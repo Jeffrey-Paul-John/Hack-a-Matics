@@ -38,9 +38,9 @@ describe('FormattedChatMessage renderInline', () => {
   })
 
   it('returns plain text when no markdown is present', () => {
-    const text = 'MedFlow clinical copilot is operational.'
+    const text = 'PulseGrid clinical copilot is operational.'
     const nodes = renderInline(text, false)
-    expect(nodes).toEqual(['MedFlow clinical copilot is operational.'])
+    expect(nodes).toEqual(['PulseGrid clinical copilot is operational.'])
   })
 })
 

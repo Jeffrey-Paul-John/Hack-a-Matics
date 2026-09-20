@@ -45,12 +45,12 @@ export function Sidebar({ activeTab, onSelectTab, alertCount = 0 }: SidebarProps
           <div className="flex items-center gap-3 overflow-hidden">
             {/* Logo Badge */}
             <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
-              MF
+              PG
             </div>
             {!collapsed && (
               <div className="leading-tight truncate">
                 <div className="font-extrabold text-sm tracking-tight text-slate-900">
-                  MEDFLOW
+                  PULSEGRID
                 </div>
                 <div className="text-[10px] font-bold text-slate-400 tracking-wider">
                   CLINICAL INTELLIGENCE

@@ -15,6 +15,8 @@ export function useCurtain(): PageCurtain {
   return useContext(CurtainContext)
 }
 
+export const usePageCurtain = useCurtain
+
 /**
  * Convenience helper to sweep the curtain closed, perform navigation,
  * and sweep open once the new route is ready.

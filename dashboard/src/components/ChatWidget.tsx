@@ -56,7 +56,7 @@ export function ChatWidget() {
     {
       id: 'init-1',
       sender: 'assistant',
-      text: 'MedFlow Clinical Intelligence Copilot active. Query live unit telemetry, triage bottlenecks, or scenario impacts.',
+      text: 'PulseGrid Clinical Intelligence Copilot active. Query live unit telemetry, triage bottlenecks, or scenario impacts.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ])
@@ -146,7 +146,7 @@ export function ChatWidget() {
       const errorMsg: ChatMessage = {
         id: `bot-err-${Date.now()}`,
         sender: 'assistant',
-        text: 'Clinical telemetry feed unavailable. Please ensure MedFlow backend is running.',
+        text: 'Clinical telemetry feed unavailable. Please ensure PulseGrid backend is running.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       }
       setMessages((prev) => [...prev, errorMsg])
@@ -219,8 +219,8 @@ export function ChatWidget() {
                           playNow(
                             'preview-sample',
                             language === 'hi'
-                              ? 'मेडफ्लो क्लिनिकल इंटेलिजेंस सक्रिय है।'
-                              : 'MedFlow clinical copilot is operational.',
+                              ? 'पल्सग्रिड क्लिनिकल इंटेलिजेंस सक्रिय है।'
+                              : 'PulseGrid clinical copilot is operational.',
                             language
                           )
                         }
@@ -472,7 +472,7 @@ export function ChatWidget() {
         type="button"
         onClick={() => setIsOpen((v) => !v)}
         className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-slate-900 text-white shadow-float hover:bg-slate-800 hover:scale-105 transition-all text-xs font-bold"
-        aria-label="Open MedFlow Copilot"
+        aria-label="Open PulseGrid Copilot"
       >
         <MessageCircle size={16} className="text-emerald-400" />
         <span>{t('chat.title')}</span>
