@@ -10,7 +10,13 @@ const tone: Record<string, string> = {
   LOW: 'bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold',
 }
 
-export function QueuePanel({ queues }: { queues: Record<string, QueuePatient[]> }) {
+export function QueuePanel({
+  queues,
+  externalFilter = '',
+}: {
+  queues: Record<string, QueuePatient[]>
+  externalFilter?: string
+}) {
   const [filterText, setFilterText] = useState('')
   const [acuityFilter, setAcuityFilter] = useState<string>('ALL')
   const { t } = useTranslation()
@@ -19,11 +25,14 @@ export function QueuePanel({ queues }: { queues: Record<string, QueuePatient[]> 
     .flatMap(([department, patients]) => patients.map(patient => ({ department, ...patient })))
     .sort((a, b) => b.score - a.score)
 
+  const activeFilter = (filterText || externalFilter).trim().toLowerCase()
+
   const rows = allRows.filter(row => {
     const matchesSearch =
-      filterText === '' ||
-      row.id.toLowerCase().includes(filterText.toLowerCase()) ||
-      row.department.toLowerCase().includes(filterText.toLowerCase())
+      activeFilter === '' ||
+      row.id.toLowerCase().includes(activeFilter) ||
+      row.department.toLowerCase().includes(activeFilter) ||
+      row.urgency.toLowerCase().includes(activeFilter)
 
     const matchesAcuity = acuityFilter === 'ALL' || row.urgency === acuityFilter
     return matchesSearch && matchesAcuity

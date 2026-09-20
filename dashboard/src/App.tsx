@@ -320,8 +320,8 @@ function Dashboard() {
                     </p>
                   </div>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                    <QueuePanel queues={state.queues} />
-                    <ResourceGrid resources={state.resources} />
+                    <QueuePanel queues={state.queues} externalFilter={searchTerm} />
+                    <ResourceGrid resources={state.resources} searchFilter={searchTerm} />
                   </div>
                 </div>
               }
@@ -426,7 +426,7 @@ function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <QueuePanel queues={state.queues} />
+                    <QueuePanel queues={state.queues} externalFilter={searchTerm} />
                   </div>
                 </div>
               }

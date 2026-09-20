@@ -5,8 +5,10 @@ import { useTranslation } from '../onboarding/i18n'
 
 export function ResourceGrid({
   resources,
+  searchFilter = '',
 }: {
   resources: Record<string, Record<string, ResourcePool>>
+  searchFilter?: string
 }) {
   const [selectedDept, setSelectedDept] = useState<string>('ALL')
   const { t } = useTranslation()
@@ -29,10 +31,14 @@ export function ResourceGrid({
   const totalAvailable = Math.max(0, totalCap - totalInUse - totalDown)
   const systemLoad = totalCap > 0 ? (totalInUse / totalCap) * 100 : 0
 
-  const filteredDepts =
-    selectedDept === 'ALL'
-      ? departments
-      : departments.filter(d => d === selectedDept)
+  const query = searchFilter.trim().toLowerCase()
+  const filteredDepts = departments.filter(d => {
+    if (selectedDept !== 'ALL' && d !== selectedDept) return false
+    if (!query) return true
+    if (d.toLowerCase().includes(query)) return true
+    const poolNames = Object.keys(resources[d] || {})
+    return poolNames.some(p => p.toLowerCase().includes(query))
+  })
 
   return (
     <section data-tour="resource-grid" className="sentinel-card flex flex-col gap-5">
