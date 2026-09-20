@@ -9,7 +9,9 @@ import {
   FlaskConical,
   GitFork,
   LayoutGrid,
+  Menu,
   Settings,
+  X,
 } from 'lucide-react'
 import { useTranslation } from '../onboarding/i18n'
 
@@ -27,37 +29,77 @@ interface SidebarProps {
   activeTab: TabKey
   onSelectTab: (tab: TabKey) => void
   alertCount?: number
+  mobileOpen?: boolean
+  onCloseMobile?: () => void
 }
 
-export function Sidebar({ activeTab, onSelectTab, alertCount = 0 }: SidebarProps) {
+export function Sidebar({
+  activeTab,
+  onSelectTab,
+  alertCount = 0,
+  mobileOpen = false,
+  onCloseMobile,
+}: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const { t } = useTranslation()
 
+  const handleItemClick = (tab: TabKey) => {
+    onSelectTab(tab)
+    if (onCloseMobile) onCloseMobile()
+  }
+
   return (
-    <aside
-      className={`hidden md:flex flex-col bg-white border-r border-[#e2e8f0] h-screen sticky top-0 justify-between transition-all duration-300 z-30 ${
-        collapsed ? 'w-16' : 'w-64'
-      }`}
-    >
-      <div className="p-4 flex flex-col h-full overflow-y-auto">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between pb-6 border-b border-slate-100">
-          <div className="flex items-center gap-3 overflow-hidden">
-            {/* Logo Badge */}
-            <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
-              PG
-            </div>
-            {!collapsed && (
-              <div className="leading-tight truncate">
-                <div className="font-extrabold text-sm tracking-tight text-slate-900">
-                  PULSEGRID
-                </div>
-                <div className="text-[10px] font-bold text-slate-400 tracking-wider">
-                  CLINICAL INTELLIGENCE
-                </div>
+    <>
+      {/* Mobile Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 md:hidden animate-fadeIn"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`bg-white border-r border-[#e2e8f0] h-screen transition-all duration-300 flex flex-col justify-between ${
+          /* Desktop */
+          'hidden md:flex md:sticky md:top-0 md:z-30 ' + (collapsed ? 'md:w-16' : 'md:w-64')
+        } ${
+          /* Mobile Drawer */
+          mobileOpen
+            ? '!flex fixed inset-y-0 left-0 z-50 w-72 shadow-2xl animate-in slide-in-from-left duration-200'
+            : ''
+        }`}
+      >
+        <div className="p-4 flex flex-col h-full overflow-y-auto">
+          {/* Brand Header */}
+          <div className="flex items-center justify-between pb-6 border-b border-slate-100">
+            <div className="flex items-center gap-3 overflow-hidden">
+              {/* Logo Badge */}
+              <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                PG
               </div>
+              {(!collapsed || mobileOpen) && (
+                <div className="leading-tight truncate">
+                  <div className="font-extrabold text-sm tracking-tight text-slate-900">
+                    PULSEGRID
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-400 tracking-wider">
+                    CLINICAL INTELLIGENCE
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Close Button */}
+            {mobileOpen && (
+              <button
+                onClick={onCloseMobile}
+                className="md:hidden p-1.5 text-slate-400 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors"
+                aria-label="Close navigation drawer"
+              >
+                <X size={18} />
+              </button>
             )}
-          </div>
 
           <button
             onClick={() => setCollapsed(c => !c)}
@@ -79,71 +121,71 @@ export function Sidebar({ activeTab, onSelectTab, alertCount = 0 }: SidebarProps
             )}
             <div className="flex flex-col gap-1">
               <button
-                onClick={() => onSelectTab('overview')}
+                onClick={() => handleItemClick('overview')}
                 className={`nav-item w-full ${activeTab === 'overview' ? 'active' : ''}`}
                 title={t('nav.overview')}
               >
                 <LayoutGrid size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.overview')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.overview')}</span>}
               </button>
 
               <button
-                onClick={() => onSelectTab('hospital-map')}
+                onClick={() => handleItemClick('hospital-map')}
                 className={`nav-item w-full ${activeTab === 'hospital-map' ? 'active' : ''}`}
                 title={t('nav.hospitalMap')}
               >
                 <GitFork size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.hospitalMap')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.hospitalMap')}</span>}
               </button>
             </div>
           </div>
 
           {/* Section: ANALYSIS */}
           <div>
-            {!collapsed && (
+            {(!collapsed || mobileOpen) && (
               <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {t('nav.analysis')}
               </p>
             )}
             <div className="flex flex-col gap-1">
               <button
-                onClick={() => onSelectTab('simulation-lab')}
+                onClick={() => handleItemClick('simulation-lab')}
                 className={`nav-item w-full ${activeTab === 'simulation-lab' ? 'active' : ''}`}
                 title={t('nav.simulationLab')}
               >
                 <FlaskConical size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.simulationLab')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.simulationLab')}</span>}
               </button>
 
               <button
-                onClick={() => onSelectTab('policy-testing')}
+                onClick={() => handleItemClick('policy-testing')}
                 className={`nav-item w-full ${activeTab === 'policy-testing' ? 'active' : ''}`}
                 title={t('nav.policyTesting')}
               >
                 <BarChart3 size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.policyTesting')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.policyTesting')}</span>}
               </button>
             </div>
           </div>
 
           {/* Section: OPERATIONS */}
           <div>
-            {!collapsed && (
+            {(!collapsed || mobileOpen) && (
               <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {t('nav.operations')}
               </p>
             )}
             <div className="flex flex-col gap-1">
               <button
-                onClick={() => onSelectTab('alerts')}
+                onClick={() => handleItemClick('alerts')}
                 className={`nav-item w-full justify-between ${activeTab === 'alerts' ? 'active' : ''}`}
                 title={t('nav.alerts')}
               >
                 <div className="flex items-center gap-3 truncate">
                   <Bell size={17} className="shrink-0" />
-                  {!collapsed && <span>{t('nav.alerts')}</span>}
+                  {(!collapsed || mobileOpen) && <span>{t('nav.alerts')}</span>}
                 </div>
-                {!collapsed && alertCount > 0 && (
+                {(!collapsed || mobileOpen) && alertCount > 0 && (
                   <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
                     {alertCount}
                   </span>
@@ -151,45 +193,46 @@ export function Sidebar({ activeTab, onSelectTab, alertCount = 0 }: SidebarProps
               </button>
 
               <button
-                onClick={() => onSelectTab('reports')}
+                onClick={() => handleItemClick('reports')}
                 className={`nav-item w-full ${activeTab === 'reports' ? 'active' : ''}`}
                 title={t('nav.reports')}
               >
                 <FileText size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.reports')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.reports')}</span>}
               </button>
             </div>
           </div>
 
           {/* Section: SYSTEM */}
           <div>
-            {!collapsed && (
+            {(!collapsed || mobileOpen) && (
               <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {t('nav.system')}
               </p>
             )}
             <div className="flex flex-col gap-1">
               <button
-                onClick={() => onSelectTab('guide')}
+                onClick={() => handleItemClick('guide')}
                 className={`nav-item w-full ${activeTab === 'guide' ? 'active' : ''}`}
                 title={t('nav.guide')}
               >
                 <BookOpen size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.guide')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.guide')}</span>}
               </button>
 
               <button
-                onClick={() => onSelectTab('settings')}
+                onClick={() => handleItemClick('settings')}
                 className={`nav-item w-full ${activeTab === 'settings' ? 'active' : ''}`}
                 title={t('nav.settings')}
               >
                 <Settings size={17} className="shrink-0" />
-                {!collapsed && <span>{t('nav.settings')}</span>}
+                {(!collapsed || mobileOpen) && <span>{t('nav.settings')}</span>}
               </button>
             </div>
           </div>
         </nav>
       </div>
     </aside>
+    </>
   )
 }

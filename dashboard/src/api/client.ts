@@ -15,7 +15,41 @@ import type {
   WhatIfResponse,
 } from './types'
 
-const base = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
+export function resolveApiBaseUrl(): string {
+  // 1. Explicit VITE_API_URL or VITE_API_BASE_URL takes first priority
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '')
+  }
+
+  // 2. Dynamic hostname detection for LAN mobile browser testing
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const { hostname, protocol } = window.location
+    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      const port = '8000'
+      const scheme = protocol === 'https:' ? 'https' : 'http'
+      return `${scheme}://${hostname}:${port}`
+    }
+  }
+
+  // 3. Clean default without hardcoded IPs
+  return 'http://localhost:8000'
+}
+
+export function resolveWsUrl(apiBase: string, path: string = '/ws/live'): string {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  // Derive ws:// from http:// and wss:// from https://
+  const wsBase = apiBase.replace(/^http(s?):\/\//i, 'ws$1://')
+  return `${wsBase}${cleanPath}`
+}
+
+export const API_BASE_URL = resolveApiBaseUrl()
+
+export function getWsUrl(path: string = '/ws/live'): string {
+  return resolveWsUrl(API_BASE_URL, path)
+}
+
+const base = API_BASE_URL
 
 export function getSessionId(): string {
   try {
@@ -51,6 +85,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   base,
+  getWsUrl,
   getSessionId,
   state: () => request<SimulationState>('/simulation/state'),
   start: (body: StartRequest) =>

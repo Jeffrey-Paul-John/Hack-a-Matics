@@ -188,6 +188,16 @@ function Dashboard() {
     URL.revokeObjectURL(url)
   }
 
+  const [isSlowLoad, setIsSlowLoad] = useState(false)
+
+  useEffect(() => {
+    if (state) return
+    const timer = setTimeout(() => {
+      setIsSlowLoad(true)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [state])
+
   if (!state) {
     return (
       <main className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6">
@@ -200,19 +210,32 @@ function Dashboard() {
           </h1>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
             {query.error
-              ? 'Start the FastAPI backend at 127.0.0.1:8000 to connect this surveillance desk.'
+              ? `Could not reach backend at ${api.base}. Verify that your backend service is running and CORS is configured.`
+              : isSlowLoad
+              ? 'Waking up the server… Free-tier hosts sleep after periods of inactivity and may take 30–50 seconds to complete the initial spin-up.'
               : 'Establishing live connection to clinical simulation engine…'}
           </p>
+
+          {isSlowLoad && !query.error && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-[11px] flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              <span>Cold start in progress — server is booting up.</span>
+            </div>
+          )}
+
           <button
-            className="w-full mt-6 py-2.5 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shadow-sm"
+            className="w-full mt-6 py-2.5 px-4 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50"
+            disabled={query.isLoading && !query.error}
             onClick={() => void act(() => api.start({ seed: 42, strategy }))}
           >
-            Start Simulation Shift
+            {query.isLoading && !query.error ? 'Connecting to Server...' : 'Start Simulation Shift'}
           </button>
         </div>
       </main>
     )
   }
+
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
 
   const alertCount = state.metrics.sla_violations
 
@@ -223,6 +246,8 @@ function Dashboard() {
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
         alertCount={alertCount}
+        mobileOpen={mobileDrawerOpen}
+        onCloseMobile={() => setMobileDrawerOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -233,6 +258,7 @@ function Dashboard() {
           connectionStatus={connectionStatus}
           alertCount={alertCount}
           onSearch={setSearchTerm}
+          onOpenMobileMenu={() => setMobileDrawerOpen(true)}
           onGuideMe={() => {
             const tourKey = activeTab in tourRegistry ? activeTab : 'new-user-dashboard'
             startTour(tourKey as keyof typeof tourRegistry)

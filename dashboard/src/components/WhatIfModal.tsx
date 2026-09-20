@@ -260,14 +260,14 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
       onClick={e => {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden text-slate-800">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[94vh] sm:max-h-[90vh] flex flex-col overflow-hidden text-slate-800">
         {/* Header */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-900 to-indigo-950 text-white">
+        <div className="px-4 py-3.5 sm:px-6 sm:py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-900 to-indigo-950 text-white">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <Sparkles size={18} />
@@ -294,8 +294,8 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
         </div>
 
         {/* Live Queue & Fork Context Strip */}
-        <div className="bg-slate-100/90 border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="bg-slate-100/90 border-b border-slate-200 px-4 py-2 sm:px-6 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex items-center gap-1.5 bg-white border border-slate-300 px-2.5 py-1 rounded-full shadow-2xs">
               <span
                 className={`w-2 h-2 rounded-full ${displayedWaiting > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}
@@ -331,7 +331,7 @@ export function WhatIfModal({ isOpen, onClose, currentStrategy = 'resource_aware
         </div>
 
         {/* Scrollable Content */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1 text-xs">
           {/* Quick Scenarios Row with Suggest Bottleneck Scenario Button */}
           <div>
             <div className="flex items-center justify-between mb-2">
