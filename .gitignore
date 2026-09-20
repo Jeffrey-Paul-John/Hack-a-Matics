@@ -47,6 +47,7 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+!dashboard/.env.production
 *.pem
 *.key
 *.cert

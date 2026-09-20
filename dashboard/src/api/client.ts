@@ -18,21 +18,48 @@ import type {
 export function resolveApiBaseUrl(): string {
   // 1. Explicit VITE_API_URL or VITE_API_BASE_URL takes first priority
   const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
-  if (envUrl && typeof envUrl === 'string' && envUrl.trim().length > 0) {
+  if (
+    envUrl &&
+    typeof envUrl === 'string' &&
+    envUrl.trim().length > 0 &&
+    !envUrl.includes('your-backend.onrender.com') &&
+    !envUrl.includes('api.medflow.health')
+  ) {
     return envUrl.trim().replace(/\/+$/, '')
   }
 
-  // 2. Dynamic hostname detection for LAN mobile browser testing
+  // 2. Cloud production fallback (Vercel, Render, or Vite production mode)
+  if (
+    import.meta.env.PROD ||
+    (typeof window !== 'undefined' &&
+      window.location?.hostname &&
+      (window.location.hostname.endsWith('.vercel.app') ||
+        window.location.hostname.endsWith('.onrender.com') ||
+        window.location.hostname.endsWith('.pages.dev') ||
+        window.location.hostname.endsWith('.netlify.app')))
+  ) {
+    return 'https://hack-a-matics.onrender.com'
+  }
+
+  // 3. Dynamic hostname detection for LAN mobile browser testing (e.g. 192.168.x.x, 10.x.x.x)
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const { hostname, protocol } = window.location
-    if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    if (
+      hostname &&
+      hostname !== 'localhost' &&
+      hostname !== '127.0.0.1' &&
+      (hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.startsWith('172.') ||
+        hostname.endsWith('.local'))
+    ) {
       const port = '8000'
       const scheme = protocol === 'https:' ? 'https' : 'http'
       return `${scheme}://${hostname}:${port}`
     }
   }
 
-  // 3. Clean default without hardcoded IPs
+  // 4. Clean default for local dev
   return 'http://localhost:8000'
 }
 

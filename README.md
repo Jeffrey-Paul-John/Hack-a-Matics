@@ -339,10 +339,10 @@ git push origin main
    - `VOICE_ENABLED`: `false` (or `true` if Sarvam API key is supplied).
    - `NUM_PROXIES`: `1` (Render acts as 1 reverse proxy).
 5. Click **Apply** or **Create Web Service**.
-6. Wait for the Docker build to complete. Once deployed, note down your backend URL (e.g., `https://medflow-backend.onrender.com`).
+6. Wait for the Docker build to complete. Once deployed, note down your backend URL (e.g., `https://hack-a-matics.onrender.com`).
 7. Verify the service by visiting:
    ```text
-   https://medflow-backend.onrender.com/health
+   https://hack-a-matics.onrender.com/health
    ```
    It should return `{"status": "healthy", "service": "pulsegrid-api", "version": "1.0.0", ...}` in milliseconds.
 
@@ -357,7 +357,7 @@ git push origin main
    - **Install Command**: `npm ci`
 4. Add Environment Variable:
    - **Key**: `VITE_API_URL`
-   - **Value**: Your Render backend URL from Step 2, e.g. `https://medflow-backend.onrender.com` *(Do NOT include a trailing slash)*.
+   - **Value**: Your Render backend URL, e.g. `https://hack-a-matics.onrender.com` *(Do NOT include a trailing slash)*.
 5. Click **Deploy**. Vercel will build and deploy your app to a production URL (e.g., `https://medflow-dashboard.vercel.app`).
 
 #### Step 4: Configure CORS on Backend & Redeploy

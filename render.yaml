@@ -13,7 +13,7 @@ services:
       - key: CORS_ORIGINS
         value: https://localhost,http://localhost,capacitor://localhost,http://localhost:5173,http://127.0.0.1:5173
       - key: CORS_ORIGIN_REGEX
-        value: ""
+        value: "https://.*\\.vercel\\.app"
       - key: NUM_PROXIES
         value: "1"
       - key: VOICE_ENABLED
